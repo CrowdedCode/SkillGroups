@@ -14,6 +14,7 @@ find_package(CommonLibSSE CONFIG REQUIRED)
 
 set(SKILLGROUPS_COMMON_SOURCES
     src/SkillGroups/Core.cpp
+    src/SkillGroups/Profiles.cpp
     src/SkillGroups/Settings.cpp
 )
 

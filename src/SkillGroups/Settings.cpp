@@ -1,7 +1,11 @@
 #include "SkillGroups/Settings.h"
 
+#include "SkillGroups/Profiles.h"
+
+#include <array>
 #include <charconv>
 #include <fstream>
+#include <optional>
 #include <spdlog/spdlog.h>
 #include <string>
 
@@ -40,20 +44,6 @@ namespace SkillGroups::Settings
 			}
 
 			return a_default;
-		}
-
-		[[nodiscard]] std::optional<float> ParseFloat(std::string_view a_value)
-		{
-			const auto value = Trim(a_value);
-			float result = 0.0F;
-			const auto* first = value.data();
-			const auto* last = value.data() + value.size();
-			const auto [ptr, ec] = std::from_chars(first, last, result);
-			if (ec != std::errc{} || ptr != last) {
-				return std::nullopt;
-			}
-
-			return result;
 		}
 
 		[[nodiscard]] std::optional<int> ParseInt(std::string_view a_value)
@@ -101,76 +91,37 @@ namespace SkillGroups::Settings
 			}
 		}
 
+		[[nodiscard]] int ParseProfileIndex(std::string_view a_value, int a_default)
+		{
+			const auto value = ParseInt(a_value);
+			if (!value || *value < 0) {
+				return a_default;
+			}
+
+			return *value;
+		}
+
 		void ApplySetting(std::string_view a_section, std::string_view a_key, std::string_view a_value)
 		{
 			if (a_section == "General") {
 				if (a_key == "Enabled" || a_key == "bEnabled") {
 					g_config.enabled = ParseBool(a_value, g_config.enabled);
-				} else if (a_key == "AutoCacheOnLevelXp" || a_key == "bAutoCacheOnLevelXp") {
-					g_config.autoCacheOnLevelXp = ParseBool(a_value, g_config.autoCacheOnLevelXp);
+				} else if (a_key == "CharacterXpProfile" || a_key == "iCharacterXpProfile") {
+					g_config.characterXpProfileIndex = ParseProfileIndex(a_value, g_config.characterXpProfileIndex);
+				} else if (a_key == "CharacterXpScalingProfile" || a_key == "iCharacterXpScalingProfile") {
+					g_config.characterXpScalingProfileIndex = ParseProfileIndex(a_value, g_config.characterXpScalingProfileIndex);
+				} else if (a_key == "SkillXpProfile" || a_key == "iSkillXpProfile") {
+					g_config.skillXpProfileIndex = ParseProfileIndex(a_value, g_config.skillXpProfileIndex);
 				} else if (a_key == "AutoApplySkillXpOnLevelXp" || a_key == "bAutoApplySkillXpOnLevelXp") {
 					g_config.autoApplySkillXpOnLevelXp = ParseBool(a_value, g_config.autoApplySkillXpOnLevelXp);
 				} else if (a_key == "DivideSkillXpByGroupSize" || a_key == "bDivideSkillXpByGroupSize") {
 					g_config.divideSkillXpByGroupSize = ParseBool(a_value, g_config.divideSkillXpByGroupSize);
-				} else if (a_key == "UseCustomCachedPlayerXpMultipliers" || a_key == "bUseCustomCachedPlayerXpMultipliers") {
-					g_config.useCustomCachedPlayerXpMultipliers = ParseBool(a_value, g_config.useCustomCachedPlayerXpMultipliers);
-				} else if (a_key == "UseCustomCachedSkillXpMultipliers" || a_key == "bUseCustomCachedSkillXpMultipliers") {
-					g_config.useCustomCachedSkillXpMultipliers = ParseBool(a_value, g_config.useCustomCachedSkillXpMultipliers);
 				} else if (a_key == "LogLevel") {
 					g_config.logLevel = ParseLogLevel(a_value);
 				} else if (a_key == "iLogLevel") {
 					g_config.logLevel = ParseLogLevelIndex(a_value, g_config.logLevel);
 				}
 				return;
-			}
-
-			if (a_section == "GroupXpMultiplierScales") {
-				const auto groups = SkillGroups();
-				for (std::size_t index = 0; index < groups.size(); ++index) {
-					const auto groupName = groups[index].name;
-					const auto mcmKey = "f" + std::string{ groupName };
-					if (a_key == groupName || a_key == mcmKey) {
-						g_config.groupXpMultiplierScales[index] =
-							ParseFloat(a_value).value_or(g_config.groupXpMultiplierScales[index]);
-						return;
-					}
-				}
-
-				return;
-			}
-
-			if (a_section != "PlayerXpMultipliers" &&
-				a_section != "CustomCachedPlayerXpMultipliers" &&
-				a_section != "PlayerXpMultiplierScales" &&
-				a_section != "CustomCachedSkillXpMultipliers") {
-				return;
-			}
-
-			for (std::size_t index = 0; index < SkillCount; ++index) {
-				const auto skillName = SkillName(static_cast<Skill>(index));
-				if (a_section == "PlayerXpMultipliers" && a_key == skillName) {
-					g_config.playerXpMultipliers[index] = ParseFloat(a_value);
-					return;
-				}
-
-				const auto mcmKey = "f" + std::string{ skillName };
-				if (a_section == "CustomCachedPlayerXpMultipliers" && (a_key == skillName || a_key == mcmKey)) {
-					g_config.customCachedPlayerXpMultipliers[index] =
-						ParseFloat(a_value).value_or(g_config.customCachedPlayerXpMultipliers[index]);
-					return;
-				}
-
-				if (a_section == "PlayerXpMultiplierScales" && a_key == mcmKey) {
-					g_config.playerXpMultiplierScales[index] = ParseFloat(a_value).value_or(g_config.playerXpMultiplierScales[index]);
-					return;
-				}
-
-				if (a_section == "CustomCachedSkillXpMultipliers" && (a_key == skillName || a_key == mcmKey)) {
-					g_config.customCachedSkillXpMultipliers[index] =
-						ParseFloat(a_value).value_or(g_config.customCachedSkillXpMultipliers[index]);
-					return;
-				}
-
 			}
 		}
 
@@ -232,22 +183,25 @@ namespace SkillGroups::Settings
 	void Load()
 	{
 		g_config = {};
-		g_config.customCachedPlayerXpMultipliers.fill(1.0F);
-		g_config.customCachedSkillXpMultipliers.fill(1.0F);
-		g_config.groupXpMultiplierScales = {
-			0.75F,
-			1.15F,
-			0.75F,
-			1.4F,
-			1.4F,
-			0.15F,
-			1.4F
-		};
-		g_config.playerXpMultiplierScales.fill(1.0F);
 		for (const auto path : kSettingsPaths) {
 			LoadFile(path);
 		}
 		ApplyLogLevel();
+		Profiles::Load();
+		const auto profileSettings = Profiles::GetCharacterXpSettings(static_cast<std::size_t>(g_config.characterXpProfileIndex));
+		SetCharacterXpRuntimeSettings(
+			profileSettings.useFlatCharacterXp,
+			profileSettings.flatCharacterXp,
+			profileSettings.levelUpBase,
+			profileSettings.levelUpMult);
+	}
+
+	void SetCharacterXpRuntimeSettings(bool a_useFlatCharacterXp, float a_flatCharacterXp, float a_levelUpBase, float a_levelUpMult)
+	{
+		g_config.useFlatCharacterXp = a_useFlatCharacterXp;
+		g_config.flatCharacterXp = a_flatCharacterXp;
+		g_config.levelUpBase = a_levelUpBase;
+		g_config.levelUpMult = a_levelUpMult;
 	}
 
 	void ApplyLogLevel()

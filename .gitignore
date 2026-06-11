@@ -7,13 +7,18 @@
 .idea
 .vs
 .vscode/settings.json
+*.user
 
 # Possible C++ build output directories and files
 out
 build
 cmake-build*
+CMakeUserPresets.json
 *.dll
 *.pdb
 
 # Skyrim archive files
 *.bsa
+
+# Local machine/session notes
+lookups.md

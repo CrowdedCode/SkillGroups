@@ -49,8 +49,8 @@ namespace
 	void OnDataLoaded()
 	{
 		SkillGroups::Settings::Load();
-		if (!SkillGroups::Hook::CacheMultipliers()) {
-			SKSE::log::warn("SkillGroups could not cache any skill multipliers");
+		if (!SkillGroups::Hook::RefreshCharacterXpMultipliers()) {
+			SKSE::log::warn("SkillGroups could not refresh character XP multipliers");
 		}
 		if (!SkillGroups::Hook::Install()) {
 			SKSE::log::error("SkillGroups hook could not be installed; grouped character XP will remain disabled");

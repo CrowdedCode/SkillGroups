@@ -1,10 +1,5 @@
 #pragma once
 
-#include "SkillGroups/Core.h"
-
-#include <array>
-#include <optional>
-
 namespace SkillGroups::Settings
 {
 	enum class LogLevel
@@ -18,20 +13,20 @@ namespace SkillGroups::Settings
 	{
 		bool enabled{ true };
 		LogLevel logLevel{ LogLevel::Info };
-		bool autoCacheOnLevelXp{ false };
+		int characterXpProfileIndex{ 0 };
+		int characterXpScalingProfileIndex{ 0 };
+		int skillXpProfileIndex{ 0 };
 		bool autoApplySkillXpOnLevelXp{ false };
 		bool divideSkillXpByGroupSize{ true };
-		bool useCustomCachedPlayerXpMultipliers{ false };
-		bool useCustomCachedSkillXpMultipliers{ false };
-		std::array<std::optional<float>, SkillCount> playerXpMultipliers{};
-		std::array<float, SkillCount> customCachedPlayerXpMultipliers{};
-		std::array<float, SkillGroupCount> groupXpMultiplierScales{};
-		std::array<float, SkillCount> playerXpMultiplierScales{};
-		std::array<float, SkillCount> customCachedSkillXpMultipliers{};
+		bool useFlatCharacterXp{ false };
+		float flatCharacterXp{ 10.0F };
+		float levelUpBase{ 75.0F };
+		float levelUpMult{ 25.0F };
 	};
 
 	[[nodiscard]] const Config& Get();
 	void Load();
+	void SetCharacterXpRuntimeSettings(bool a_useFlatCharacterXp, float a_flatCharacterXp, float a_levelUpBase, float a_levelUpMult);
 	void ApplyLogLevel();
 	[[nodiscard]] bool IsDebugLoggingEnabled();
 }
