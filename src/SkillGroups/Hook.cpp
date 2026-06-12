@@ -129,6 +129,23 @@ namespace SkillGroups::Hook
 			return true;
 		}
 
+		[[nodiscard]] float GetGameSettingFloat(const char* a_name, float a_default)
+		{
+			auto* collection = RE::GameSettingCollection::GetSingleton();
+			if (!collection) {
+				SKSE::log::warn("SkillGroups could not get GameSettingCollection while reading {}", a_name);
+				return a_default;
+			}
+
+			auto* setting = collection->GetSetting(a_name);
+			if (!setting || setting->GetType() != RE::Setting::Type::kFloat) {
+				SKSE::log::warn("SkillGroups could not find float game setting {}", a_name);
+				return a_default;
+			}
+
+			return setting->data.f;
+		}
+
 		[[nodiscard]] float GroupMultiplierSum(Skill a_skill)
 		{
 			const auto* group = FindSkillGroup(a_skill);
@@ -226,7 +243,7 @@ namespace SkillGroups::Hook
 				const auto otherMax = OtherGroupMaxLevel(states, *skill);
 				const auto skillIndex = static_cast<std::size_t>(*skill);
 				SKSE::log::debug(
-					"{} rank-up level XP: actorValue={}, skillRank={}, vanillaPlayerXp={}, skillMultiplier={}, groupMultiplierSum={}, awardedPlayerXp={}, activeLevel={}, otherGroupMax={}, contributes={}, {}",
+					"{} rank-up level XP: actorValue={}, hookExperience={}, basePlayerXp={}, skillMultiplier={}, groupMultiplierSum={}, awardedPlayerXp={}, assumedActiveLevel={}, otherGroupMax={}, contributes={}, {}",
 					SkillName(*skill),
 					a_rawSkill,
 					awardedLevel,
@@ -321,10 +338,10 @@ namespace SkillGroups::Hook
 
 	bool RefreshCharacterXpMultipliers()
 	{
-		const auto& settings = Settings::Get();
-		const auto& characterXpMultipliers = Profiles::GetCharacterXpMultipliers(static_cast<std::size_t>(settings.characterXpProfileIndex));
-		const auto& groupXpMultiplierScales = Profiles::GetGroupXpMultiplierScales(static_cast<std::size_t>(settings.characterXpScalingProfileIndex));
-		const auto& playerXpMultiplierScales = Profiles::GetPlayerXpMultiplierScales(static_cast<std::size_t>(settings.characterXpScalingProfileIndex));
+		const auto profileIndex = static_cast<std::size_t>(Settings::Get().characterXpProfileIndex);
+		const auto& characterXpMultipliers = Profiles::GetCharacterXpMultipliers(profileIndex);
+		const auto& groupXpMultiplierScales = Profiles::GetGroupXpMultiplierScales(profileIndex);
+		const auto& playerXpMultiplierScales = Profiles::GetPlayerXpMultiplierScales(profileIndex);
 
 		for (std::size_t index = 0; index < SkillCount; ++index) {
 			const auto skill = static_cast<Skill>(index);
@@ -355,6 +372,16 @@ namespace SkillGroups::Hook
 		return appliedBase && appliedMult;
 	}
 
+	float GetCharacterXpLevelUpBase()
+	{
+		return GetGameSettingFloat("fXPLevelUpBase", Settings::Get().levelUpBase);
+	}
+
+	float GetCharacterXpLevelUpMult()
+	{
+		return GetGameSettingFloat("fXPLevelUpMult", Settings::Get().levelUpMult);
+	}
+
 	bool ResyncCurrentLevelThreshold(float a_levelUpBase, float a_levelUpMult)
 	{
 		auto* player = GetPlayer();
@@ -373,7 +400,7 @@ namespace SkillGroups::Hook
 		const auto threshold = std::max(0.0F, a_levelUpBase + (a_levelUpMult * (playerLevel - 1.0F)));
 		runtimeData.skills->data->levelThreshold = threshold;
 		ImproveLevelExpBySkillLevel(*player, 0.0F, 0.0F, Skill::OneHanded);
-		SKSE::log::info("SkillGroups resynced current player level threshold for level {} to {} and processed vanilla level-up state", playerLevel, threshold);
+		SKSE::log::info("SkillGroups resynced current player level {} threshold to {} and processed vanilla level-up state", playerLevel, threshold);
 		return true;
 	}
 

@@ -1,9 +1,0 @@
-SkillGroups quick test reminders
-
-- Confirm profiles load from the Profiles folder, master profile behavior works, and locked presets disable editing/import/cache/divisor controls.
-- Test Custom profile imports from presets on Character XP and Skill XP pages; values should update in MCM memory only until Apply.
-- Test Character XP Apply saves Custom, applies flat XP toggle/amount, level thresholds, contribution multipliers, group scales, and skill scales.
-- Test Skill XP Apply saves Custom, applies divisor behavior correctly, then refreshes sliders to live game useMult values.
-- Test auto-apply on skill rank-up still does not use the divisor.
-- Test current level threshold resync button: confirm warning, threshold recalculation, and whether vanilla level-up processing triggers as expected.
-- Spot-check Warrior, Hunter, Thief, and Mage profile behavior for relevant/irrelevant skill XP and character XP contribution.

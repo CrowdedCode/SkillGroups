@@ -14,7 +14,6 @@ namespace SkillGroups::Settings
 		bool enabled{ true };
 		LogLevel logLevel{ LogLevel::Info };
 		int characterXpProfileIndex{ 0 };
-		int characterXpScalingProfileIndex{ 0 };
 		int skillXpProfileIndex{ 0 };
 		bool autoApplySkillXpOnLevelXp{ false };
 		bool divideSkillXpByGroupSize{ true };
@@ -26,6 +25,7 @@ namespace SkillGroups::Settings
 
 	[[nodiscard]] const Config& Get();
 	void Load();
+	void LoadProfiles();
 	void SetCharacterXpRuntimeSettings(bool a_useFlatCharacterXp, float a_flatCharacterXp, float a_levelUpBase, float a_levelUpMult);
 	void ApplyLogLevel();
 	[[nodiscard]] bool IsDebugLoggingEnabled();

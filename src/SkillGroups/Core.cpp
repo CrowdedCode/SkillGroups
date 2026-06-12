@@ -9,20 +9,20 @@ namespace SkillGroups
 	namespace
 	{
 		constexpr std::array<Skill, 3> kCrafting{ Skill::Smithing, Skill::Enchanting, Skill::Alchemy };
-		constexpr std::array<Skill, 2> kCommand{ Skill::Illusion, Skill::Conjuration };
+		constexpr std::array<Skill, 2> kControl{ Skill::Illusion, Skill::Conjuration };
 		constexpr std::array<Skill, 3> kSupport{ Skill::Restoration, Skill::Alteration, Skill::Sneak };
 		constexpr std::array<Skill, 2> kDefence{ Skill::LightArmor, Skill::HeavyArmor };
 		constexpr std::array<Skill, 2> kRanged{ Skill::Archery, Skill::Destruction };
-		constexpr std::array<Skill, 3> kWealth{ Skill::Speech, Skill::Pickpocket, Skill::Lockpicking };
+		constexpr std::array<Skill, 3> kUtility{ Skill::Speech, Skill::Pickpocket, Skill::Lockpicking };
 		constexpr std::array<Skill, 3> kMelee{ Skill::OneHanded, Skill::TwoHanded, Skill::Block };
 
 		constexpr std::array<SkillGroup, SkillGroupCount> kSkillGroups{
 			SkillGroup{ "Crafting", kCrafting },
-			SkillGroup{ "Command", kCommand },
+			SkillGroup{ "Control", kControl },
 			SkillGroup{ "Support", kSupport },
 			SkillGroup{ "Defence", kDefence },
 			SkillGroup{ "Ranged", kRanged },
-			SkillGroup{ "Wealth", kWealth },
+			SkillGroup{ "Utility", kUtility },
 			SkillGroup{ "Melee", kMelee }
 		};
 

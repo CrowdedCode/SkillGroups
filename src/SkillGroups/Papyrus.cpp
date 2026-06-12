@@ -69,6 +69,22 @@ namespace SkillGroups::Papyrus
 			return Hook::GetCachedSkillXpMultiplier(a_index);
 		}
 
+		bool CacheCharacterXpSettings(RE::StaticFunctionTag*, std::uint32_t a_profile)
+		{
+			if (!Profiles::IsProfileEditable(a_profile)) {
+				return false;
+			}
+
+			const auto settings = Profiles::GetCharacterXpSettings(a_profile);
+			return Profiles::SetCharacterXpSettings(
+				a_profile,
+				Profiles::CharacterXpSettings{
+					settings.useFlatCharacterXp,
+					settings.flatCharacterXp,
+					Hook::GetCharacterXpLevelUpBase(),
+					Hook::GetCharacterXpLevelUpMult() });
+		}
+
 		std::uint32_t GetSkillXpProfileCount(RE::StaticFunctionTag*)
 		{
 			return static_cast<std::uint32_t>(Profiles::ProfileCount());
@@ -76,7 +92,7 @@ namespace SkillGroups::Papyrus
 
 		RE::BSFixedString GetSkillXpProfileName(RE::StaticFunctionTag*, std::uint32_t a_profile)
 		{
-			return RE::BSFixedString{ Profiles::ProfileName(a_profile) };
+			return RE::BSFixedString{ Profiles::ProfileDisplayName(a_profile) };
 		}
 
 		bool IsSkillXpProfileEditable(RE::StaticFunctionTag*, std::uint32_t a_profile)
@@ -162,7 +178,6 @@ namespace SkillGroups::Papyrus
 
 		bool ResyncCurrentLevelThreshold(RE::StaticFunctionTag*, std::uint32_t a_characterProfile)
 		{
-			Settings::Load();
 			const auto profileSettings = Profiles::GetCharacterXpSettings(a_characterProfile);
 			Settings::SetCharacterXpRuntimeSettings(
 				profileSettings.useFlatCharacterXp,
@@ -192,17 +207,10 @@ namespace SkillGroups::Papyrus
 			return result;
 		}
 
-		bool ApplyCharacterXpProfiles(RE::StaticFunctionTag*, std::uint32_t a_characterProfile, std::uint32_t a_scalingProfile)
+		bool ApplyCharacterXpProfiles(RE::StaticFunctionTag*, std::uint32_t a_characterProfile)
 		{
 			if (Profiles::IsProfileEditable(a_characterProfile) && !Profiles::SaveProfile(a_characterProfile)) {
 				SKSE::log::warn("SkillGroups could not save editable character XP profile before applying");
-				return false;
-			}
-
-			if (a_scalingProfile != a_characterProfile &&
-				Profiles::IsProfileEditable(a_scalingProfile) &&
-				!Profiles::SaveProfile(a_scalingProfile)) {
-				SKSE::log::warn("SkillGroups could not save editable character XP scaling profile before applying");
 				return false;
 			}
 
@@ -226,7 +234,6 @@ namespace SkillGroups::Papyrus
 
 		bool CacheSkillXpMultipliers(RE::StaticFunctionTag*)
 		{
-			Settings::Load();
 			const auto result = Hook::CacheSkillXpMultipliers();
 			if (result) {
 				SKSE::log::info("SkillGroups cached skill XP multipliers from MCM");
@@ -246,6 +253,7 @@ namespace SkillGroups::Papyrus
 
 		a_vm->RegisterFunction("ApplyCharacterXpProfiles", "SkillGroups_Native", ApplyCharacterXpProfiles);
 		a_vm->RegisterFunction("ApplySkillXpMultipliers", "SkillGroups_Native", ApplySkillXpMultipliers);
+		a_vm->RegisterFunction("CacheCharacterXpSettings", "SkillGroups_Native", CacheCharacterXpSettings);
 		a_vm->RegisterFunction("CacheSkillXpMultipliers", "SkillGroups_Native", CacheSkillXpMultipliers);
 		a_vm->RegisterFunction("GetCachedSkillXpMultiplier", "SkillGroups_Native", GetCachedSkillXpMultiplier);
 		a_vm->RegisterFunction("GetCharacterXpProfileMultiplier", "SkillGroups_Native", GetCharacterXpProfileMultiplier);

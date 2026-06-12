@@ -28,8 +28,8 @@ Melee: One-Handed, Two-Handed, Block
 Ranged: Archery, Destruction
 Defence: Light Armor, Heavy Armor
 Support: Restoration, Alteration, Sneak
-Command: Illusion, Conjuration
-Wealth: Speech, Pickpocket, Lockpicking
+Control: Illusion, Conjuration
+Utility: Speech, Pickpocket, Lockpicking
 Crafting: Smithing, Enchanting, Alchemy
 ```
 

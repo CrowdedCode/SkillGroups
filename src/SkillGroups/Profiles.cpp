@@ -8,6 +8,7 @@
 #include <optional>
 #include <spdlog/spdlog.h>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace SkillGroups::Profiles
@@ -15,6 +16,10 @@ namespace SkillGroups::Profiles
 	namespace
 	{
 		constexpr std::string_view kProfileFolder{ "Data\\SKSE\\Plugins\\SkillGroups\\Profiles" };
+		constexpr std::array<std::string_view, 2> kTranslationPaths{
+			"Data\\Interface\\Translations\\SkillGroups_english.txt",
+			"Data\\Interface\\Translations\\SkillGroups_ENGLISH.txt"
+		};
 		constexpr std::array<float, SkillCount> kDefaultSkillXpMultipliers{
 			6.3F,
 			5.95F,
@@ -59,6 +64,7 @@ namespace SkillGroups::Profiles
 		};
 
 		std::vector<Profile> g_profiles;
+		std::unordered_map<std::string, std::string> g_translations;
 
 		[[nodiscard]] std::string Trim(std::string_view a_value)
 		{
@@ -69,6 +75,76 @@ namespace SkillGroups::Profiles
 
 			const auto end = a_value.find_last_not_of(" \t\r\n");
 			return std::string{ a_value.substr(begin, end - begin + 1) };
+		}
+
+		[[nodiscard]] std::string Utf8FromWide(std::wstring_view a_value)
+		{
+			std::string result;
+			result.reserve(a_value.size() * 3);
+			for (const auto ch : a_value) {
+				const auto value = static_cast<std::uint32_t>(ch);
+				if (value <= 0x7F) {
+					result.push_back(static_cast<char>(value));
+				} else if (value <= 0x7FF) {
+					result.push_back(static_cast<char>(0xC0 | (value >> 6)));
+					result.push_back(static_cast<char>(0x80 | (value & 0x3F)));
+				} else {
+					result.push_back(static_cast<char>(0xE0 | (value >> 12)));
+					result.push_back(static_cast<char>(0x80 | ((value >> 6) & 0x3F)));
+					result.push_back(static_cast<char>(0x80 | (value & 0x3F)));
+				}
+			}
+
+			return result;
+		}
+
+		void LoadTranslations()
+		{
+			g_translations.clear();
+
+			for (const auto path : kTranslationPaths) {
+				std::ifstream file{ std::string{ path }, std::ios::binary };
+				if (!file) {
+					continue;
+				}
+
+				std::vector<char> bytes{ std::istreambuf_iterator<char>{ file }, std::istreambuf_iterator<char>{} };
+				if (bytes.size() < 2 ||
+					static_cast<unsigned char>(bytes[0]) != 0xFF ||
+					static_cast<unsigned char>(bytes[1]) != 0xFE) {
+					continue;
+				}
+
+				std::wstring text;
+				text.reserve((bytes.size() - 2) / 2);
+				for (std::size_t index = 2; index + 1 < bytes.size(); index += 2) {
+					const auto lo = static_cast<unsigned char>(bytes[index]);
+					const auto hi = static_cast<unsigned char>(bytes[index + 1]);
+					text.push_back(static_cast<wchar_t>(lo | (hi << 8)));
+				}
+
+				std::size_t lineStart = 0;
+				while (lineStart < text.size()) {
+					auto lineEnd = text.find_first_of(L"\r\n", lineStart);
+					if (lineEnd == std::wstring::npos) {
+						lineEnd = text.size();
+					}
+
+					const auto line = std::wstring_view{ text }.substr(lineStart, lineEnd - lineStart);
+					const auto tab = line.find(L'\t');
+					if (tab != std::wstring_view::npos && tab > 0 && tab + 1 < line.size()) {
+						g_translations[Utf8FromWide(line.substr(0, tab))] = Utf8FromWide(line.substr(tab + 1));
+					}
+
+					lineStart = lineEnd + 1;
+					while (lineStart < text.size() && (text[lineStart] == L'\r' || text[lineStart] == L'\n')) {
+						++lineStart;
+					}
+				}
+
+				SKSE::log::info("SkillGroups loaded {} translation(s) from {}", g_translations.size(), path);
+				return;
+			}
 		}
 
 		[[nodiscard]] bool ParseBool(std::string_view a_value, bool a_default)
@@ -289,11 +365,21 @@ namespace SkillGroups::Profiles
 
 			return g_profiles.front();
 		}
+
+		[[nodiscard]] std::string_view ProfileName(std::size_t a_profileIndex)
+		{
+			if (a_profileIndex >= g_profiles.size()) {
+				return DefaultProfile().name;
+			}
+
+			return g_profiles[a_profileIndex].name;
+		}
 	}
 
 	void Load()
 	{
 		g_profiles.clear();
+		LoadTranslations();
 
 		const std::filesystem::path folder{ kProfileFolder };
 		std::error_code ec;
@@ -346,13 +432,15 @@ namespace SkillGroups::Profiles
 		return g_profiles.size();
 	}
 
-	std::string_view ProfileName(std::size_t a_profileIndex)
+	std::string_view ProfileDisplayName(std::size_t a_profileIndex)
 	{
-		if (a_profileIndex >= ProfileCount()) {
-			return DefaultProfile().name;
+		const auto name = ProfileName(a_profileIndex);
+		const auto key = std::string{ "$SkillGroups_Profile_" }.append(name);
+		if (const auto translation = g_translations.find(key); translation != g_translations.end()) {
+			return translation->second;
 		}
 
-		return g_profiles[a_profileIndex].name;
+		return name;
 	}
 
 	bool IsProfileEditable(std::size_t a_profileIndex)

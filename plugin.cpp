@@ -49,6 +49,7 @@ namespace
 	void OnDataLoaded()
 	{
 		SkillGroups::Settings::Load();
+		SkillGroups::Settings::LoadProfiles();
 		if (!SkillGroups::Hook::RefreshCharacterXpMultipliers()) {
 			SKSE::log::warn("SkillGroups could not refresh character XP multipliers");
 		}

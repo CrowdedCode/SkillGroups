@@ -108,8 +108,6 @@ namespace SkillGroups::Settings
 					g_config.enabled = ParseBool(a_value, g_config.enabled);
 				} else if (a_key == "CharacterXpProfile" || a_key == "iCharacterXpProfile") {
 					g_config.characterXpProfileIndex = ParseProfileIndex(a_value, g_config.characterXpProfileIndex);
-				} else if (a_key == "CharacterXpScalingProfile" || a_key == "iCharacterXpScalingProfile") {
-					g_config.characterXpScalingProfileIndex = ParseProfileIndex(a_value, g_config.characterXpScalingProfileIndex);
 				} else if (a_key == "SkillXpProfile" || a_key == "iSkillXpProfile") {
 					g_config.skillXpProfileIndex = ParseProfileIndex(a_value, g_config.skillXpProfileIndex);
 				} else if (a_key == "AutoApplySkillXpOnLevelXp" || a_key == "bAutoApplySkillXpOnLevelXp") {
@@ -187,6 +185,10 @@ namespace SkillGroups::Settings
 			LoadFile(path);
 		}
 		ApplyLogLevel();
+	}
+
+	void LoadProfiles()
+	{
 		Profiles::Load();
 		const auto profileSettings = Profiles::GetCharacterXpSettings(static_cast<std::size_t>(g_config.characterXpProfileIndex));
 		SetCharacterXpRuntimeSettings(

@@ -1,7 +1,8 @@
 Scriptname SkillGroups_Native Hidden
 
-bool Function ApplyCharacterXpProfiles(int aiCharacterProfile, int aiScalingProfile) global native
+bool Function ApplyCharacterXpProfiles(int aiCharacterProfile) global native
 bool Function ApplySkillXpMultipliers(bool abUseDivisor, int aiSkillXpProfile) global native
+bool Function CacheCharacterXpSettings(int aiCharacterProfile) global native
 bool Function CacheSkillXpMultipliers() global native
 float Function GetCachedSkillXpMultiplier(int aiIndex) global native
 float Function GetCharacterXpProfileMultiplier(int aiProfile, int aiIndex) global native
