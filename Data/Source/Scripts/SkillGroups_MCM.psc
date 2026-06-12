@@ -182,9 +182,10 @@ Event OnOptionDefault(int a_option)
 		SetInt("iLogLevel:General", 1, OID_LogLevel)
 	elseif a_option == OID_MasterProfile
 		SetMasterProfile(GetDefaultMasterProfile())
+		ForcePageReset()
 	elseif a_option == OID_CharacterXpProfile
 		SetCharacterXpProfile(0)
-		UpdateCustomCharacterXpFlags()
+		ForcePageReset()
 	elseif a_option == OID_UseFlatCharacterXp
 		SetProfileCharacterXpSettings(false, GetProfileFlatCharacterXp(), GetProfileLevelUpBase(), GetProfileLevelUpMult())
 	elseif a_option == OID_FlatCharacterXp
@@ -195,7 +196,7 @@ Event OnOptionDefault(int a_option)
 		SetProfileCharacterXpSettings(GetProfileUseFlatCharacterXp(), GetProfileFlatCharacterXp(), GetProfileLevelUpBase(), 25.0)
 	elseif a_option == OID_SkillXpProfile
 		SetSkillXpProfile(0)
-		UpdateCustomSkillXpFlags()
+		ForcePageReset()
 	elseif a_option == OID_DivideSkillXpByGroupSize
 		SetBool("bDivideSkillXpByGroupSize:General", true, OID_DivideSkillXpByGroupSize)
 		InvalidateSkillXpPageState()
@@ -311,16 +312,17 @@ Event OnOptionMenuAccept(int a_option, int a_index)
 		RefreshNativeSettings()
 	elseif a_option == OID_MasterProfile
 		SetMasterProfile(a_index)
+		ForcePageReset()
 		ShowFinishedMessage("Skill Groups finished loading profile.")
 	elseif a_option == OID_CharacterXpProfile
 		SetCharacterXpProfile(a_index)
-		UpdateCustomCharacterXpFlags()
+		ForcePageReset()
 		ShowFinishedMessage("Skill Groups finished loading profile.")
 	elseif a_option == OID_ImportCharacterXpPage
 		ImportCharacterXpPageFromProfile(a_index)
 	elseif a_option == OID_SkillXpProfile
 		SetSkillXpProfile(a_index)
-		UpdateCustomSkillXpFlags()
+		ForcePageReset()
 		ShowFinishedMessage("Skill Groups finished loading profile.")
 	elseif a_option == OID_ImportSkillXpPage
 		ImportSkillXpPageFromProfile(a_index)
