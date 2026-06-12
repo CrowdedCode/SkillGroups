@@ -8,6 +8,7 @@
 #include <array>
 #include <cmath>
 #include <cstring>
+#include <iomanip>
 #include <sstream>
 
 namespace SkillGroups::Hook
@@ -272,6 +273,20 @@ namespace SkillGroups::Hook
 			return true;
 		}
 
+		[[nodiscard]] std::string ReadPatchBytes(std::uintptr_t a_address)
+		{
+			std::ostringstream stream;
+			stream << std::hex << std::setfill('0');
+			for (std::size_t index = 0; index < kPatchSize; ++index) {
+				if (index > 0) {
+					stream << ' ';
+				}
+				stream << std::setw(2) << static_cast<unsigned>(*reinterpret_cast<const std::uint8_t*>(a_address + index));
+			}
+
+			return stream.str();
+		}
+
 		void WriteAbsoluteCall(std::uintptr_t a_address, const void* a_target)
 		{
 			std::array<std::uint8_t, kPatchSize> bytes{
@@ -463,7 +478,11 @@ namespace SkillGroups::Hook
 		const REL::Relocation<std::uintptr_t> base{ kImproveLevelExpBySkillLevel };
 		const auto patchAddress = base.address() + kImproveLevelExpBySkillLevelAeOffset;
 		if (!MatchesExpectedBytes(patchAddress)) {
-			SKSE::log::error("SkillGroups ImproveLevelExpBySkillLevel signature check failed at relocation {} + {:#x}", kImproveLevelExpBySkillLevel.id(), kImproveLevelExpBySkillLevelAeOffset);
+			SKSE::log::error(
+				"SkillGroups ImproveLevelExpBySkillLevel signature check failed at relocation {} + {:#x}; found bytes: {}",
+				kImproveLevelExpBySkillLevel.id(),
+				kImproveLevelExpBySkillLevelAeOffset,
+				ReadPatchBytes(patchAddress));
 			return false;
 		}
 
