@@ -29,13 +29,6 @@ target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23)
 target_include_directories(${PROJECT_NAME} PRIVATE src)
 target_precompile_headers(${PROJECT_NAME} PRIVATE PCH.h)
 
-add_executable(SkillGroupsTests
-    tests/SkillGroupsTests.cpp
-    src/SkillGroups/Core.cpp
-)
-target_compile_features(SkillGroupsTests PRIVATE cxx_std_23)
-target_include_directories(SkillGroupsTests PRIVATE src)
-
 if(DEFINED OUTPUT_FOLDER)
     set(DLL_FOLDER "${OUTPUT_FOLDER}/SKSE/Plugins")
 

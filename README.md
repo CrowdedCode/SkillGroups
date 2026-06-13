@@ -83,8 +83,7 @@ Configure and build with the included CMake presets:
 
 ```powershell
 cmake --preset debug
-cmake --build build/debug --target SkillGroups SkillGroupsTests
-build/debug/SkillGroupsTests.exe
+cmake --build build/debug --target SkillGroups
 
 cmake --preset release
 cmake --build build/release --target SkillGroups
