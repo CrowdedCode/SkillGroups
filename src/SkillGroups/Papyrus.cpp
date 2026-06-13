@@ -214,9 +214,10 @@ namespace SkillGroups::Papyrus
 			return index < 0 ? -1 : static_cast<std::int32_t>(index);
 		}
 
-		bool RenameProfile(RE::StaticFunctionTag*, std::uint32_t a_profile, RE::BSFixedString a_name)
+		std::int32_t RenameProfile(RE::StaticFunctionTag*, std::uint32_t a_profile, RE::BSFixedString a_name)
 		{
-			return Profiles::RenameProfile(a_profile, a_name.c_str());
+			const auto index = Profiles::RenameProfile(a_profile, a_name.c_str());
+			return index < 0 ? -1 : static_cast<std::int32_t>(index);
 		}
 
 		bool SetProfileCharacterXpSettings(RE::StaticFunctionTag*,

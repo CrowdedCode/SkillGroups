@@ -28,7 +28,7 @@ bool Function IsHookAvailable() global native
 bool Function IsSkillXpProfileEditable(int aiProfile) global native
 bool Function OpenLogFile() global native
 bool Function RefreshSettings() global native
-bool Function RenameProfile(int aiProfile, string asName) global native
+int Function RenameProfile(int aiProfile, string asName) global native
 bool Function ResyncCurrentLevelThreshold(int aiCharacterProfile) global native
 bool Function SetCharacterXpProfileMultiplier(int aiProfile, int aiIndex, float afValue) global native
 bool Function SetGroupXpProfileMultiplierScale(int aiProfile, int aiGroupIndex, float afValue) global native

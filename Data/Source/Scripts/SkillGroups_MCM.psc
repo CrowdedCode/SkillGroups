@@ -68,7 +68,7 @@ int OID_SkillXpHeader
 int[] OIDs_CustomSkillXp
 
 int Function GetVersion()
-	return 10
+	return 11
 EndFunction
 
 Event OnConfigInit()
@@ -1200,6 +1200,12 @@ Function SetMasterProfile(int a_value)
 EndFunction
 
 Function CreateNewProfile(int a_target, int a_sourceProfile)
+	string masterName = SkillGroups_Native.GetSkillXpProfileName(GetMasterProfile())
+	string characterName = SkillGroups_Native.GetSkillXpProfileName(GetCharacterXpProfile())
+	string skillName = SkillGroups_Native.GetSkillXpProfileName(GetSkillXpProfile())
+	bool hadSelectedCharacter = SelectedCharacterXpProfileIndex >= 0
+	bool hadSelectedSkill = SelectedSkillXpProfileIndex >= 0
+
 	int profile = SkillGroups_Native.CreateProfileFrom(a_sourceProfile, "")
 	if profile < 0
 		ShowFinishedMessage("Skill Groups could not create profile.")
@@ -1208,6 +1214,7 @@ Function CreateNewProfile(int a_target, int a_sourceProfile)
 
 	SkillXpProfileOptionsLoaded = false
 	RefreshSkillXpProfileOptions()
+	RemapProfileSelections(masterName, characterName, skillName, hadSelectedCharacter, hadSelectedSkill)
 	if a_target == 1
 		SetMasterProfile(profile)
 	elseif a_target == 3
@@ -1221,17 +1228,73 @@ EndFunction
 
 Function RenameSelectedProfile(string a_name)
 	int profile = GetMasterProfile()
-	if !SkillGroups_Native.RenameProfile(profile, a_name)
+	string oldName = SkillGroups_Native.GetSkillXpProfileName(profile)
+	string masterName = SkillGroups_Native.GetSkillXpProfileName(GetMasterProfile())
+	string characterName = SkillGroups_Native.GetSkillXpProfileName(GetCharacterXpProfile())
+	string skillName = SkillGroups_Native.GetSkillXpProfileName(GetSkillXpProfile())
+	bool hadSelectedCharacter = SelectedCharacterXpProfileIndex >= 0
+	bool hadSelectedSkill = SelectedSkillXpProfileIndex >= 0
+	int renamedProfile = SkillGroups_Native.RenameProfile(profile, a_name)
+	if renamedProfile < 0
 		ShowFinishedMessage("Skill Groups could not rename profile.")
 		return
 	endif
 
 	SkillXpProfileOptionsLoaded = false
 	RefreshSkillXpProfileOptions()
-	SetMenuOptionValue(OID_MasterProfile, SkillXpProfileOptions[profile])
-	SetInputOptionValue(OID_ProfileName, SkillXpProfileOptions[profile], false)
+	string renamedName = SkillGroups_Native.GetSkillXpProfileName(renamedProfile)
+	if masterName == oldName
+		masterName = renamedName
+	endif
+	if characterName == oldName
+		characterName = renamedName
+	endif
+	if skillName == oldName
+		skillName = renamedName
+	endif
+	RemapProfileSelections(masterName, characterName, skillName, hadSelectedCharacter, hadSelectedSkill)
+	SetMenuOptionValue(OID_MasterProfile, SkillXpProfileOptions[renamedProfile])
+	SetInputOptionValue(OID_ProfileName, SkillXpProfileOptions[renamedProfile], false)
 	ForcePageReset()
 	ShowFinishedMessage("Skill Groups renamed profile.")
+EndFunction
+
+Function RemapProfileSelections(string a_masterName, string a_characterName, string a_skillName, bool a_hadSelectedCharacter, bool a_hadSelectedSkill)
+	int masterProfile = FindProfileOption(a_masterName)
+	if masterProfile >= 0
+		MCM.SetModSettingInt("SkillGroups", "iMasterProfile:General", masterProfile)
+	endif
+
+	int characterProfile = FindProfileOption(a_characterName)
+	if characterProfile >= 0
+		MCM.SetModSettingInt("SkillGroups", "iCharacterXpProfile:General", characterProfile)
+		if a_hadSelectedCharacter
+			SelectedCharacterXpProfileIndex = characterProfile
+		else
+			SelectedCharacterXpProfileIndex = -1
+		endif
+	endif
+
+	int skillProfile = FindProfileOption(a_skillName)
+	if skillProfile >= 0
+		MCM.SetModSettingInt("SkillGroups", "iSkillXpProfile:General", skillProfile)
+		if a_hadSelectedSkill
+			SelectedSkillXpProfileIndex = skillProfile
+		else
+			SelectedSkillXpProfileIndex = -1
+		endif
+	endif
+EndFunction
+
+int Function FindProfileOption(string a_name)
+	int i = 0
+	while i < ProfileCount
+		if SkillGroups_Native.GetSkillXpProfileName(i) == a_name
+			return i
+		endif
+		i += 1
+	endwhile
+	return -1
 EndFunction
 
 Function RefreshNativeSettings()

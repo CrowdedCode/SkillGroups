@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.1
+
+Fixed newly created or renamed profiles changing saved profile selections after restarting the game.
+
 ## 2.0.0
 
 This update adds profile-driven custom skill groups, a new MCM group editor, and several fixes to make runtime settings apply more reliably.

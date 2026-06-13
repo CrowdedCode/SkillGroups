@@ -704,16 +704,16 @@ namespace SkillGroups::Profiles
 		return -1;
 	}
 
-	bool RenameProfile(std::size_t a_profileIndex, std::string_view a_name)
+	int RenameProfile(std::size_t a_profileIndex, std::string_view a_name)
 	{
 		if (!IsProfileEditable(a_profileIndex)) {
-			return false;
+			return -1;
 		}
 
 		const auto name = std::string{ Trim(a_name) };
 		const auto fileName = FileNameFromProfileName(name);
 		if (name.empty() || fileName.empty() || ProfileNameExists(name, a_profileIndex)) {
-			return false;
+			return -1;
 		}
 
 		auto& profile = g_profiles[a_profileIndex];
@@ -722,20 +722,31 @@ namespace SkillGroups::Profiles
 		if (newPath != oldPath) {
 			std::error_code ec;
 			if (std::filesystem::exists(newPath, ec)) {
-				return false;
+				return -1;
 			}
 
 			if (std::filesystem::exists(oldPath, ec)) {
 				std::filesystem::rename(oldPath, newPath, ec);
 				if (ec) {
-					return false;
+					return -1;
 				}
 			}
 			profile.path = newPath;
 		}
 
 		profile.name = name;
-		return SaveProfile(a_profileIndex);
+		if (!SaveProfile(a_profileIndex)) {
+			return -1;
+		}
+
+		Load();
+		for (std::size_t index = 0; index < g_profiles.size(); ++index) {
+			if (g_profiles[index].name == name) {
+				return static_cast<int>(index);
+			}
+		}
+
+		return -1;
 	}
 
 	float GetCharacterXpMultiplier(std::size_t a_profileIndex, std::size_t a_skillIndex)
