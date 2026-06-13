@@ -208,6 +208,17 @@ namespace SkillGroups::Papyrus
 			return Profiles::SetSkillGroupAssignments(a_profile, groupSlotNames, a_skillGroupSlots);
 		}
 
+		std::int32_t CreateProfileFrom(RE::StaticFunctionTag*, std::uint32_t a_sourceProfile, RE::BSFixedString a_name)
+		{
+			const auto index = Profiles::CreateProfileFrom(a_sourceProfile, a_name.c_str());
+			return index < 0 ? -1 : static_cast<std::int32_t>(index);
+		}
+
+		bool RenameProfile(RE::StaticFunctionTag*, std::uint32_t a_profile, RE::BSFixedString a_name)
+		{
+			return Profiles::RenameProfile(a_profile, a_name.c_str());
+		}
+
 		bool SetProfileCharacterXpSettings(RE::StaticFunctionTag*,
 			std::uint32_t a_profile,
 			bool a_useFlatCharacterXp,
@@ -430,6 +441,8 @@ namespace SkillGroups::Papyrus
 		a_vm->RegisterFunction("RefreshSettings", "SkillGroups_Native", RefreshSettings);
 		a_vm->RegisterFunction("ApplyProfileGroups", "SkillGroups_Native", ApplyProfileGroups);
 		a_vm->RegisterFunction("CommitProfileGroups", "SkillGroups_Native", CommitProfileGroups);
+		a_vm->RegisterFunction("CreateProfileFrom", "SkillGroups_Native", CreateProfileFrom);
+		a_vm->RegisterFunction("RenameProfile", "SkillGroups_Native", RenameProfile);
 		a_vm->RegisterFunction("ResyncCurrentLevelThreshold", "SkillGroups_Native", ResyncCurrentLevelThreshold);
 		a_vm->RegisterFunction("SetCharacterXpProfileMultiplier", "SkillGroups_Native", SetCharacterXpProfileMultiplier);
 		a_vm->RegisterFunction("SetGroupXpProfileMultiplierScale", "SkillGroups_Native", SetGroupXpProfileMultiplierScale);

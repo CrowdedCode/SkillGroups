@@ -22,6 +22,8 @@ namespace SkillGroups::Profiles
 	[[nodiscard]] std::size_t ProfileCount();
 	[[nodiscard]] std::string_view ProfileDisplayName(std::size_t a_profileIndex);
 	[[nodiscard]] bool IsProfileEditable(std::size_t a_profileIndex);
+	[[nodiscard]] int CreateProfileFrom(std::size_t a_sourceProfileIndex, std::string_view a_name);
+	[[nodiscard]] bool RenameProfile(std::size_t a_profileIndex, std::string_view a_name);
 	[[nodiscard]] float GetCharacterXpMultiplier(std::size_t a_profileIndex, std::size_t a_skillIndex);
 	[[nodiscard]] float GetGroupXpMultiplierScale(std::size_t a_profileIndex, std::size_t a_groupIndex);
 	[[nodiscard]] float GetPlayerXpMultiplierScale(std::size_t a_profileIndex, std::size_t a_skillIndex);

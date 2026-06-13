@@ -8,6 +8,7 @@ bool Function ApplySkillXpMultipliers(bool abUseDivisor, int aiSkillXpProfile, i
 bool Function CacheCharacterXpSettings(int aiCharacterProfile) global native
 bool Function CacheSkillXpMultipliers() global native
 bool Function CommitProfileGroups(int aiProfile, string[] asGroupSlotNames, int[] aiSkillGroupSlots) global native
+int Function CreateProfileFrom(int aiSourceProfile, string asName) global native
 float Function GetCachedSkillXpMultiplier(int aiIndex) global native
 float Function GetCharacterXpProfileMultiplier(int aiProfile, int aiIndex) global native
 float Function GetGroupXpProfileMultiplierScale(int aiProfile, int aiGroupIndex) global native
@@ -27,6 +28,7 @@ bool Function IsHookAvailable() global native
 bool Function IsSkillXpProfileEditable(int aiProfile) global native
 bool Function OpenLogFile() global native
 bool Function RefreshSettings() global native
+bool Function RenameProfile(int aiProfile, string asName) global native
 bool Function ResyncCurrentLevelThreshold(int aiCharacterProfile) global native
 bool Function SetCharacterXpProfileMultiplier(int aiProfile, int aiIndex, float afValue) global native
 bool Function SetGroupXpProfileMultiplierScale(int aiProfile, int aiGroupIndex, float afValue) global native

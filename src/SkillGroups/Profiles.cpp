@@ -202,6 +202,48 @@ namespace SkillGroups::Profiles
 			return std::nullopt;
 		}
 
+		[[nodiscard]] std::string FileNameFromProfileName(std::string_view a_name)
+		{
+			std::string result;
+			result.reserve(a_name.size());
+			for (const auto ch : a_name) {
+				if ((ch >= 'A' && ch <= 'Z') ||
+					(ch >= 'a' && ch <= 'z') ||
+					(ch >= '0' && ch <= '9') ||
+					ch == '-' ||
+					ch == '_') {
+					result.push_back(ch);
+				} else if (ch == ' ' || ch == '.') {
+					result.push_back('_');
+				}
+			}
+
+			return result;
+		}
+
+		[[nodiscard]] bool ProfileNameExists(std::string_view a_name, std::optional<std::size_t> a_allowedIndex = std::nullopt)
+		{
+			for (std::size_t index = 0; index < g_profiles.size(); ++index) {
+				if ((!a_allowedIndex || index != *a_allowedIndex) && g_profiles[index].name == a_name) {
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+		[[nodiscard]] std::string NextProfileName()
+		{
+			for (std::size_t index = 1;; ++index) {
+				auto name = std::string{ "New Profile " }.append(std::to_string(index));
+				const auto path = std::filesystem::path{ kProfileFolder } / (FileNameFromProfileName(name) + ".ini");
+				std::error_code ec;
+				if (!ProfileNameExists(name) && !std::filesystem::exists(path, ec)) {
+					return name;
+				}
+			}
+		}
+
 		[[nodiscard]] std::optional<std::size_t> GroupIndexForKey(std::string_view a_key)
 		{
 			const auto groups = DefaultSkillGroups();
@@ -619,6 +661,81 @@ namespace SkillGroups::Profiles
 	bool IsProfileEditable(std::size_t a_profileIndex)
 	{
 		return a_profileIndex < ProfileCount() && g_profiles[a_profileIndex].editable;
+	}
+
+	int CreateProfileFrom(std::size_t a_sourceProfileIndex, std::string_view a_name)
+	{
+		const auto requestedName = Trim(a_name);
+		const auto name = requestedName.empty() ? NextProfileName() : std::string{ requestedName };
+		const auto fileName = FileNameFromProfileName(name);
+		if (fileName.empty()) {
+			return -1;
+		}
+
+		if (ProfileNameExists(name)) {
+			return -1;
+		}
+
+		auto profile = a_sourceProfileIndex < ProfileCount() ? g_profiles[a_sourceProfileIndex] : DefaultProfile();
+		profile.path = std::filesystem::path{ kProfileFolder } / (fileName + ".ini");
+		profile.name = name;
+		profile.description = "Editable SkillGroups profile.";
+		profile.editable = true;
+
+		std::error_code ec;
+		if (std::filesystem::exists(profile.path, ec)) {
+			return -1;
+		}
+
+		g_profiles.push_back(std::move(profile));
+		const auto createdIndex = g_profiles.size() - 1;
+		if (!SaveProfile(createdIndex)) {
+			g_profiles.erase(g_profiles.begin() + static_cast<std::ptrdiff_t>(createdIndex));
+			return -1;
+		}
+
+		Load();
+		for (std::size_t index = 0; index < g_profiles.size(); ++index) {
+			if (g_profiles[index].name == name) {
+				return static_cast<int>(index);
+			}
+		}
+
+		return -1;
+	}
+
+	bool RenameProfile(std::size_t a_profileIndex, std::string_view a_name)
+	{
+		if (!IsProfileEditable(a_profileIndex)) {
+			return false;
+		}
+
+		const auto name = std::string{ Trim(a_name) };
+		const auto fileName = FileNameFromProfileName(name);
+		if (name.empty() || fileName.empty() || ProfileNameExists(name, a_profileIndex)) {
+			return false;
+		}
+
+		auto& profile = g_profiles[a_profileIndex];
+		const auto oldPath = profile.path;
+		const auto newPath = std::filesystem::path{ kProfileFolder } / (fileName + ".ini");
+		if (newPath != oldPath) {
+			std::error_code ec;
+			if (std::filesystem::exists(newPath, ec)) {
+				return false;
+			}
+
+			if (std::filesystem::exists(oldPath, ec)) {
+				std::filesystem::rename(oldPath, newPath, ec);
+				if (ec) {
+					return false;
+				}
+			}
+			profile.path = newPath;
+		}
+
+		profile.name = name;
+		return SaveProfile(a_profileIndex);
 	}
 
 	float GetCharacterXpMultiplier(std::size_t a_profileIndex, std::size_t a_skillIndex)
