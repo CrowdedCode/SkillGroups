@@ -47,7 +47,7 @@ Profiles are loaded from:
 Data/SKSE/Plugins/SkillGroups/Profiles/*.ini
 ```
 
-The shipped profiles are `Default.ini`, `Custom.ini`, `Warrior.ini`, `Hunter.ini`, `Thief.ini`, and `Mage.ini`. Profile files are complete profiles: each valid file must include the character XP settings section, character XP contribution section, skill grouping section, group XP scaling section, character skill scaling section, and skill XP multiplier section. `Custom.ini` is editable from the MCM and can be shared as a standalone profile file.
+The shipped profiles are `Default.ini`, `Custom.ini`, `Warrior.ini`, `Hunter.ini`, `Thief.ini`, and `Mage.ini`. Profile files are complete profiles: each valid file must include the character XP settings section, character XP contribution section, skill grouping section, group XP scaling section, character skill scaling section, and skill XP multiplier section. Profiles marked editable are editable from the MCM.
 
 Profiles define groups with one skill per key:
 
@@ -58,9 +58,9 @@ TwoHanded=Melee
 Block=Melee
 ```
 
-Every skill must appear exactly once. Group names are dynamic, and the `GroupXpMultiplierScales` section must contain exactly the non-empty group names used by the profile. Group order follows the `GroupXpMultiplierScales` section.
+Every skill must appear exactly once. Group names are dynamic, and the `GroupXpMultiplierScales` section must contain the exact group names used by the profile. Group order in MCM follows the `GroupXpMultiplierScales` section.
 
-The General page profile acts as a master profile. Locked presets force the configuration pages to the same profile. Custom leaves page-level profile controls available. Group changes are committed with the Groups page Apply button. Character XP changes are committed with the Character XP page Apply button. Skill XP Cache reads live game values into the selected editable profile in memory; Skill XP Apply saves the editable profile INI and writes the selected profile values to the game.
+The General page profile acts as a master profile. Locked presets force the configuration pages to the same profile. Unlocked profles leaves page-level profile controls available. Changes are committed with the Apply button. Skill XP Cache reads live game values into the selected editable profile in memory; Skill XP Apply saves the editable profile INI and writes the selected profile values to the game.
 
 Character XP profiles can also opt into a flat skill-rank XP amount and configure Skyrim's base character level threshold and threshold increase per level. These profile-backed settings are applied from the Character XP page Apply button.
 
