@@ -2,6 +2,7 @@
 
 #include "SkillGroups/Profiles.h"
 
+#include <algorithm>
 #include <array>
 #include <charconv>
 #include <fstream>
@@ -106,6 +107,8 @@ namespace SkillGroups::Settings
 			if (a_section == "General") {
 				if (a_key == "Enabled" || a_key == "bEnabled") {
 					g_config.enabled = ParseBool(a_value, g_config.enabled);
+				} else if (a_key == "MultipliersEnabled" || a_key == "bMultipliersEnabled") {
+					g_config.multipliersEnabled = ParseBool(a_value, g_config.multipliersEnabled);
 				} else if (a_key == "CharacterXpProfile" || a_key == "iCharacterXpProfile") {
 					g_config.characterXpProfileIndex = ParseProfileIndex(a_value, g_config.characterXpProfileIndex);
 				} else if (a_key == "SkillXpProfile" || a_key == "iSkillXpProfile") {
@@ -196,6 +199,22 @@ namespace SkillGroups::Settings
 			profileSettings.flatCharacterXp,
 			profileSettings.levelUpBase,
 			profileSettings.levelUpMult);
+	}
+
+	void SetRuntimeEnabled(bool a_enabled)
+	{
+		g_config.enabled = a_enabled;
+	}
+
+	void SetRuntimeMultipliersEnabled(bool a_enabled)
+	{
+		g_config.multipliersEnabled = a_enabled;
+	}
+
+	void SetRuntimeProfiles(int a_characterXpProfileIndex, int a_skillXpProfileIndex)
+	{
+		g_config.characterXpProfileIndex = std::max(0, a_characterXpProfileIndex);
+		g_config.skillXpProfileIndex = std::max(0, a_skillXpProfileIndex);
 	}
 
 	void SetCharacterXpRuntimeSettings(bool a_useFlatCharacterXp, float a_flatCharacterXp, float a_levelUpBase, float a_levelUpMult)

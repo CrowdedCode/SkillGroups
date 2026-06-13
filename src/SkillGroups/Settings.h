@@ -12,6 +12,7 @@ namespace SkillGroups::Settings
 	struct Config
 	{
 		bool enabled{ true };
+		bool multipliersEnabled{ true };
 		LogLevel logLevel{ LogLevel::Info };
 		int characterXpProfileIndex{ 0 };
 		int skillXpProfileIndex{ 0 };
@@ -26,6 +27,9 @@ namespace SkillGroups::Settings
 	[[nodiscard]] const Config& Get();
 	void Load();
 	void LoadProfiles();
+	void SetRuntimeEnabled(bool a_enabled);
+	void SetRuntimeMultipliersEnabled(bool a_enabled);
+	void SetRuntimeProfiles(int a_characterXpProfileIndex, int a_skillXpProfileIndex);
 	void SetCharacterXpRuntimeSettings(bool a_useFlatCharacterXp, float a_flatCharacterXp, float a_levelUpBase, float a_levelUpMult);
 	void ApplyLogLevel();
 	[[nodiscard]] bool IsDebugLoggingEnabled();

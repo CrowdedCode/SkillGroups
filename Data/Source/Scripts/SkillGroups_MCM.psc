@@ -3,25 +3,32 @@ Scriptname SkillGroups_MCM extends MCM_ConfigBase
 string Property MOD_SETTING_PREFIX = "" AutoReadOnly
 
 string[] SkillLabels
-string[] GroupLabels
+string[] GroupSlotOptions
 string[] LogLevelOptions
 string[] SkillXpProfileOptions
+int[] CachedSkillGroupValues
 float[] CachedCharacterXpValues
 float[] CachedCharacterGroupScaleValues
 float[] CachedCharacterSkillScaleValues
 float[] CachedSkillXpValues
 bool CachedCharacterProfileEditable
 bool CachedSkillProfileEditable
+bool CachedGroupProfileEditable
 bool CachedUseFlatCharacterXp
 float CachedFlatCharacterXp
 float CachedLevelUpBase
 float CachedLevelUpMult
 int CachedCharacterProfileIndex
 int CachedSkillProfileIndex
+int CachedGroupProfileIndex
+int SelectedCharacterXpProfileIndex
+int SelectedSkillXpProfileIndex
 bool CachedSkillDivisor
 bool SkillXpProfileOptionsLoaded
+bool RuntimeSettingsApplied
 
 int OID_Enabled
+int OID_MultipliersEnabled
 int OID_LogLevel
 int OID_MasterProfile
 int OID_HookFailure
@@ -29,6 +36,13 @@ int OID_OpenLog
 bool HookAvailable
 
 int OID_CharacterXpProfile
+int OID_GroupProfile
+int OID_ImportGroupPage
+int OID_ApplyGroups
+int OID_GroupHeader
+int OID_GroupNamesHeader
+int[] OIDs_SkillGroups
+int[] OIDs_GroupNames
 int OID_CacheCharacterXp
 int OID_ApplyCharacterXp
 int OID_ResyncLevelThreshold
@@ -60,9 +74,19 @@ EndEvent
 
 Event OnConfigRegister()
 	InitializeMenu()
+	if !RuntimeSettingsApplied
+		RuntimeSettingsApplied = ApplyRuntimeSettings(false)
+	endif
 EndEvent
 
 Event OnConfigOpen()
+	SkillXpProfileOptionsLoaded = false
+	SelectedCharacterXpProfileIndex = -1
+	SelectedSkillXpProfileIndex = -1
+	InvalidateCharacterXpPageState()
+	InvalidateGroupPageState()
+	InvalidateSkillXpPageState()
+	HookAvailable = SkillGroups_Native.IsHookAvailable()
 EndEvent
 
 Event OnVersionUpdate(int a_version)
@@ -71,9 +95,14 @@ EndEvent
 
 Event OnPageReset(string a_page)
 	SetCursorFillMode(TOP_TO_BOTTOM)
+	if a_page != "$SkillGroups_Page_Groups" && a_page != "Groups"
+		InvalidateGroupPageState()
+	endif
 
 	if a_page == "" || a_page == "$SkillGroups_Page_General" || a_page == "General"
 		RenderGeneralPage()
+	elseif a_page == "$SkillGroups_Page_Groups" || a_page == "Groups"
+		RenderGroupsPage()
 	elseif a_page == "$SkillGroups_Page_CharacterXp" || a_page == "Level XP Configuration"
 		RenderLevelXpPage()
 	elseif a_page == "$SkillGroups_Page_SkillXp" || a_page == "Skill XP Configuration"
@@ -84,6 +113,8 @@ EndEvent
 Event OnOptionHighlight(int a_option)
 	if a_option == OID_Enabled
 		SetInfoText("Controls whether Skill Groups gates character XP by skill group.")
+	elseif a_option == OID_MultipliersEnabled
+		SetInfoText("Controls Skill Groups skill XP multipliers, character XP multipliers, flat rank XP, and level threshold settings.")
 	elseif a_option == OID_LogLevel
 		SetInfoText("Controls SkillGroups.log verbosity.")
 	elseif a_option == OID_MasterProfile
@@ -92,6 +123,12 @@ Event OnOptionHighlight(int a_option)
 		SetInfoText("The character XP hook could not be applied. Check SkillGroups.log for details.")
 	elseif a_option == OID_OpenLog
 		SetInfoText("Opens SkillGroups.log.")
+	elseif a_option == OID_GroupProfile
+		SetInfoText("Selects the level XP profile whose groups are edited on this page.")
+	elseif a_option == OID_ImportGroupPage
+		SetInfoText("Copies group assignments and group names from another profile. Does not automatically apply the values to the selected profile.")
+	elseif a_option == OID_ApplyGroups
+		SetInfoText("Saves group assignments and applies them to the current character XP profile.")
 	elseif a_option == OID_CacheCharacterXp
 		SetInfoText("Gets the current character level base and threshold increase values currently used by the game. Does not automatically apply the values to the selected profile.")
 	elseif a_option == OID_ApplyCharacterXp
@@ -124,6 +161,10 @@ Event OnOptionHighlight(int a_option)
 		SetInfoText("Custom character level contribution multiplier for this skill.")
 	elseif FindOption(OIDs_CustomSkillXp, a_option) >= 0
 		SetInfoText("Custom skill XP multiplier for this skill.")
+	elseif FindOption(OIDs_SkillGroups, a_option) >= 0
+		SetInfoText("Selects the group this skill belongs to.")
+	elseif FindOption(OIDs_GroupNames, a_option) >= 0
+		SetInfoText("Renames this group.")
 	elseif FindOption(OIDs_CharacterGroupScales, a_option) >= 0
 		SetInfoText("A multiplier applied to the character XP for XP from this group. (Final xp = this * (Sum of final Skill Mults)), future version groupXP will change depending on group XP behaviour")
 	elseif FindOption(OIDs_CharacterSkillScales, a_option) >= 0
@@ -142,6 +183,8 @@ Event OnOptionSelect(int a_option)
 		else
 			ToggleBool("bEnabled:General", OID_Enabled)
 		endif
+	elseif a_option == OID_MultipliersEnabled
+		SetMultipliersEnabled(!GetBool("bMultipliersEnabled:General"))
 	elseif a_option == OID_OpenLog
 		OpenLogFile()
 	elseif a_option == OID_CacheSkillXp
@@ -162,6 +205,8 @@ Event OnOptionSelect(int a_option)
 		ToggleBool("bAutoApplySkillXpOnLevelXp:General", OID_AutoApplySkillXp)
 	elseif a_option == OID_ApplyCharacterXp
 		ApplyCharacterXpProfiles()
+	elseif a_option == OID_ApplyGroups
+		ApplyProfileGroups()
 	elseif a_option == OID_ResyncLevelThreshold
 		ResyncCurrentLevelThreshold()
 	elseif a_option == OID_UseFlatCharacterXp
@@ -178,12 +223,17 @@ Event OnOptionDefault(int a_option)
 		else
 			SetBool("bEnabled:General", false, OID_Enabled)
 		endif
+	elseif a_option == OID_MultipliersEnabled
+		SetMultipliersEnabled(true)
 	elseif a_option == OID_LogLevel
 		SetInt("iLogLevel:General", 1, OID_LogLevel)
 	elseif a_option == OID_MasterProfile
 		SetMasterProfile(GetDefaultMasterProfile())
 		ForcePageReset()
 	elseif a_option == OID_CharacterXpProfile
+		SetCharacterXpProfile(0)
+		ForcePageReset()
+	elseif a_option == OID_GroupProfile
 		SetCharacterXpProfile(0)
 		ForcePageReset()
 	elseif a_option == OID_UseFlatCharacterXp
@@ -290,7 +340,15 @@ Event OnOptionMenuOpen(int a_option)
 		SetMenuDialogOptions(SkillXpProfileOptions)
 		SetMenuDialogStartIndex(GetCharacterXpProfile())
 		SetMenuDialogDefaultIndex(GetDefaultMasterProfile())
+	elseif a_option == OID_GroupProfile
+		SetMenuDialogOptions(SkillXpProfileOptions)
+		SetMenuDialogStartIndex(GetCharacterXpProfile())
+		SetMenuDialogDefaultIndex(GetDefaultMasterProfile())
 	elseif a_option == OID_ImportCharacterXpPage
+		SetMenuDialogOptions(SkillXpProfileOptions)
+		SetMenuDialogStartIndex(GetEffectiveCharacterXpProfile())
+		SetMenuDialogDefaultIndex(0)
+	elseif a_option == OID_ImportGroupPage
 		SetMenuDialogOptions(SkillXpProfileOptions)
 		SetMenuDialogStartIndex(GetEffectiveCharacterXpProfile())
 		SetMenuDialogDefaultIndex(0)
@@ -302,6 +360,13 @@ Event OnOptionMenuOpen(int a_option)
 		SetMenuDialogOptions(SkillXpProfileOptions)
 		SetMenuDialogStartIndex(GetEffectiveSkillXpProfile())
 		SetMenuDialogDefaultIndex(0)
+	else
+		int skillGroupIndex = FindOption(OIDs_SkillGroups, a_option)
+		if skillGroupIndex >= 0
+			SetMenuDialogOptions(GroupSlotOptions)
+			SetMenuDialogStartIndex(CachedSkillGroupValues[skillGroupIndex])
+			SetMenuDialogDefaultIndex(0)
+		endif
 	endif
 EndEvent
 
@@ -318,24 +383,50 @@ Event OnOptionMenuAccept(int a_option, int a_index)
 		SetCharacterXpProfile(a_index)
 		ForcePageReset()
 		ShowFinishedMessage("Skill Groups finished loading profile.")
+	elseif a_option == OID_GroupProfile
+		SetCharacterXpProfile(a_index)
+		ForcePageReset()
+		ShowFinishedMessage("Skill Groups finished loading profile.")
 	elseif a_option == OID_ImportCharacterXpPage
 		ImportCharacterXpPageFromProfile(a_index)
+	elseif a_option == OID_ImportGroupPage
+		ImportGroupsFromProfile(a_index)
 	elseif a_option == OID_SkillXpProfile
 		SetSkillXpProfile(a_index)
 		ForcePageReset()
 		ShowFinishedMessage("Skill Groups finished loading profile.")
 	elseif a_option == OID_ImportSkillXpPage
 		ImportSkillXpPageFromProfile(a_index)
+	else
+		int skillGroupIndex = FindOption(OIDs_SkillGroups, a_option)
+		if skillGroupIndex >= 0
+			SetSkillGroup(skillGroupIndex, a_index)
+		endif
+	endif
+EndEvent
+
+Event OnOptionInputOpen(int a_option)
+	int groupIndex = FindOption(OIDs_GroupNames, a_option)
+	if groupIndex >= 0
+		SetInputDialogStartText(GroupSlotOptions[groupIndex])
+	endif
+EndEvent
+
+Event OnOptionInputAccept(int a_option, string a_input)
+	int groupIndex = FindOption(OIDs_GroupNames, a_option)
+	if groupIndex >= 0
+		RenameGroup(groupIndex, a_input)
 	endif
 EndEvent
 
 Function InitializeMenu()
 	ModName = "SkillGroups"
 
-	Pages = new string[3]
+	Pages = new string[4]
 	Pages[0] = "$SkillGroups_Page_General"
-	Pages[1] = "$SkillGroups_Page_CharacterXp"
-	Pages[2] = "$SkillGroups_Page_SkillXp"
+	Pages[1] = "$SkillGroups_Page_Groups"
+	Pages[2] = "$SkillGroups_Page_CharacterXp"
+	Pages[3] = "$SkillGroups_Page_SkillXp"
 
 	InitializeData()
 EndFunction
@@ -362,14 +453,8 @@ Function InitializeData()
 	SkillLabels[16] = "$SkillGroups_Skill_Restoration"
 	SkillLabels[17] = "$SkillGroups_Skill_Enchanting"
 
-	GroupLabels = new string[7]
-	GroupLabels[0] = "$SkillGroups_Group_Crafting"
-	GroupLabels[1] = "$SkillGroups_Group_Control"
-	GroupLabels[2] = "$SkillGroups_Group_Support"
-	GroupLabels[3] = "$SkillGroups_Group_Defence"
-	GroupLabels[4] = "$SkillGroups_Group_Ranged"
-	GroupLabels[5] = "$SkillGroups_Group_Utility"
-	GroupLabels[6] = "$SkillGroups_Group_Melee"
+	GroupSlotOptions = new string[18]
+	CachedSkillGroupValues = new int[18]
 
 	LogLevelOptions = new string[3]
 	LogLevelOptions[0] = "$SkillGroups_Log_Error"
@@ -377,15 +462,20 @@ Function InitializeData()
 	LogLevelOptions[2] = "$SkillGroups_Log_Debug"
 
 	OIDs_CustomCharacterXp = new int[18]
-	OIDs_CharacterGroupScales = new int[7]
+	OIDs_SkillGroups = new int[18]
+	OIDs_GroupNames = new int[18]
+	OIDs_CharacterGroupScales = new int[18]
 	OIDs_CharacterSkillScales = new int[18]
 	OIDs_CustomSkillXp = new int[18]
 	CachedCharacterXpValues = new float[18]
-	CachedCharacterGroupScaleValues = new float[7]
+	CachedCharacterGroupScaleValues = new float[18]
 	CachedCharacterSkillScaleValues = new float[18]
 	CachedSkillXpValues = new float[18]
 	CachedCharacterProfileIndex = -1
 	CachedSkillProfileIndex = -1
+	CachedGroupProfileIndex = -1
+	SelectedCharacterXpProfileIndex = -1
+	SelectedSkillXpProfileIndex = -1
 	SkillXpProfileOptionsLoaded = false
 EndFunction
 
@@ -674,7 +764,7 @@ Function CreateSkillXpProfileOptions(int a_count)
 EndFunction
 
 Function RenderGeneralPage()
-	RefreshRuntimeState()
+	HookAvailable = SkillGroups_Native.IsHookAvailable()
 	RefreshSkillXpProfileOptions()
 	SetTitleText("$SkillGroups_Title_Main")
 	AddHeaderOption("$SkillGroups_Header_Runtime")
@@ -684,6 +774,7 @@ Function RenderGeneralPage()
 	endif
 
 	OID_Enabled = AddToggleOption("$SkillGroups_Option_Enabled", GetBool("bEnabled:General"), enabledFlags)
+	OID_MultipliersEnabled = AddToggleOption("$SkillGroups_Option_MultipliersEnabled", GetBool("bMultipliersEnabled:General"))
 	OID_LogLevel = AddMenuOption("$SkillGroups_Option_LogLevel", LogLevelOptions[GetInt("iLogLevel:General")])
 	OID_MasterProfile = AddMenuOption("$SkillGroups_Option_Profile", SkillXpProfileOptions[GetMasterProfile()])
 
@@ -699,13 +790,12 @@ Function RenderLevelXpPage()
 	CacheCharacterXpPageState()
 	SetTitleText("$SkillGroups_Title_CharacterXp")
 	AddHeaderOption("$SkillGroups_Header_CharacterGroupSkill")
-	RenderLevelXpGroup(6, 0, 1, 3)
-	RenderLevelXpGroup(4, 2, 14, -1)
-	RenderLevelXpGroup(3, 6, 5, -1)
-	RenderLevelXpGroup(2, 16, 12, 9)
-	RenderLevelXpGroup(1, 15, 13, -1)
-	RenderLevelXpGroup(5, 11, 7, 8)
-	RenderLevelXpGroup(0, 4, 17, 10)
+	int groupIndex = 0
+	int groupCount = SkillGroups_Native.GetProfileGroupCount(GetEffectiveCharacterXpProfile())
+	while groupIndex < groupCount
+		RenderLevelXpDynamicGroup(groupIndex)
+		groupIndex += 1
+	endwhile
 
 	SetCursorPosition(1)
 
@@ -744,6 +834,42 @@ Function RenderLevelXpPage()
 	AddCustomCharacterXpSlider(15)
 	AddCustomCharacterXpSlider(16)
 	AddCustomCharacterXpSlider(17)
+EndFunction
+
+Function RenderGroupsPage()
+	RefreshSkillXpProfileOptions()
+	CacheGroupPageState()
+	SetTitleText("$SkillGroups_Title_Groups")
+	OID_GroupHeader = AddHeaderOption("$SkillGroups_Header_GroupAssignments")
+	int editFlags = OPTION_FLAG_NONE
+	if !CachedGroupProfileEditable
+		editFlags = OPTION_FLAG_DISABLED
+	endif
+	int i = 0
+	while i < SkillLabels.Length
+		OIDs_SkillGroups[i] = AddMenuOption(SkillLabels[i], GroupSlotOptions[CachedSkillGroupValues[i]], editFlags)
+		i += 1
+	endwhile
+
+	SetCursorPosition(1)
+	AddHeaderOption("$SkillGroups_Header_GroupProfile")
+	int profileFlags = OPTION_FLAG_NONE
+	if IsMasterProfileLocked()
+		profileFlags = OPTION_FLAG_DISABLED
+	endif
+	OID_GroupProfile = AddMenuOption("$SkillGroups_Option_Profile", SkillXpProfileOptions[GetEffectiveCharacterXpProfile()], profileFlags)
+	if CachedGroupProfileEditable
+		OID_ImportGroupPage = AddMenuOption("$SkillGroups_Option_ImportGroupPage", "$SkillGroups_Value_Select")
+	endif
+	OID_ApplyGroups = AddTextOption("$SkillGroups_Option_ApplyGroups", "")
+	OID_GroupNamesHeader = AddHeaderOption("$SkillGroups_Header_GroupNames")
+	i = 0
+	while i < 18
+		if IsGroupSlotUsed(i)
+			OIDs_GroupNames[i] = AddInputOption(GroupSlotOptions[i], GroupSlotOptions[i], editFlags)
+		endif
+		i += 1
+	endwhile
 EndFunction
 
 Function AddCharacterXpSettingsOptions()
@@ -837,18 +963,20 @@ Function AddCustomSkillXpSlider(int a_skillIndex)
 	OIDs_CustomSkillXp[a_skillIndex] = AddSliderOption(SkillLabels[a_skillIndex], CachedSkillXpValues[a_skillIndex], "{2}", flags)
 EndFunction
 
-Function RenderLevelXpGroup(int a_groupIndex, int a_skillA, int a_skillB, int a_skillC)
-	AddHeaderOption(GroupLabels[a_groupIndex])
+Function RenderLevelXpDynamicGroup(int a_groupIndex)
+	AddHeaderOption(SkillGroups_Native.GetProfileGroupName(GetEffectiveCharacterXpProfile(), a_groupIndex))
 	int flags = OPTION_FLAG_NONE
 	if !CachedCharacterProfileEditable
 		flags = OPTION_FLAG_DISABLED
 	endif
 	OIDs_CharacterGroupScales[a_groupIndex] = AddSliderOption("$SkillGroups_Option_Group", CachedCharacterGroupScaleValues[a_groupIndex], "{2}", flags)
-	AddCharacterSkillScale(a_skillA)
-	AddCharacterSkillScale(a_skillB)
-	if a_skillC >= 0
-		AddCharacterSkillScale(a_skillC)
-	endif
+	int skillIndex = 0
+	while skillIndex < SkillLabels.Length
+		if SkillGroups_Native.GetProfileSkillGroupIndex(GetEffectiveCharacterXpProfile(), skillIndex) == a_groupIndex
+			AddCharacterSkillScale(skillIndex)
+		endif
+		skillIndex += 1
+	endwhile
 EndFunction
 
 Function AddCharacterSkillScale(int a_skillIndex)
@@ -880,8 +1008,29 @@ Function CacheCharacterXpPageState()
 	endwhile
 
 	i = 0
-	while i < GroupLabels.Length
+	int groupCount = SkillGroups_Native.GetProfileGroupCount(profile)
+	while i < groupCount
 		CachedCharacterGroupScaleValues[i] = GetCharacterGroupScaleDisplayValue(i)
+		i += 1
+	endwhile
+EndFunction
+
+Function CacheGroupPageState()
+	int profile = GetEffectiveCharacterXpProfile()
+	if CachedGroupProfileIndex == profile
+		return
+	endif
+
+	CachedGroupProfileIndex = profile
+	CachedGroupProfileEditable = IsSelectedCharacterXpProfileEditable()
+	int i = 0
+	while i < 18
+		GroupSlotOptions[i] = SkillGroups_Native.GetProfileGroupSlotName(profile, i)
+		i += 1
+	endwhile
+	i = 0
+	while i < SkillLabels.Length
+		CachedSkillGroupValues[i] = SkillGroups_Native.GetProfileSkillGroupIndex(profile, i)
 		i += 1
 	endwhile
 EndFunction
@@ -911,6 +1060,10 @@ Function InvalidateSkillXpPageState()
 	CachedSkillProfileIndex = -1
 EndFunction
 
+Function InvalidateGroupPageState()
+	CachedGroupProfileIndex = -1
+EndFunction
+
 Function ToggleBool(string a_settingKey, int a_option)
 	bool value = !GetBool(a_settingKey)
 	SetBool(a_settingKey, value, a_option)
@@ -919,7 +1072,49 @@ EndFunction
 Function SetBool(string a_settingKey, bool a_value, int a_option)
 	MCM.SetModSettingBool("SkillGroups", a_settingKey, a_value)
 	SetToggleOptionValue(a_option, a_value)
-	RefreshNativeSettings()
+	if a_settingKey == "bEnabled:General"
+		SkillGroups_Native.SetGroupingEnabled(a_value)
+	else
+		RefreshNativeSettings()
+	endif
+EndFunction
+
+Function SetMultipliersEnabled(bool a_value)
+	MCM.SetModSettingBool("SkillGroups", "bMultipliersEnabled:General", a_value)
+	if OID_MultipliersEnabled > 0
+		SetToggleOptionValue(OID_MultipliersEnabled, a_value)
+	endif
+	if SkillGroups_Native.ApplyMultiplierSettings(a_value, GetBool("bDivideSkillXpByGroupSize:General"), GetEffectiveSkillXpProfile(), GetEffectiveCharacterXpProfile())
+		ShowFinishedMessage("Skill Groups finished applying multiplier settings.")
+	else
+		ShowFinishedMessage("Skill Groups failed to apply multiplier settings.")
+	endif
+EndFunction
+
+bool Function ApplyRuntimeSettings(bool a_showMessage)
+	RefreshSkillXpProfileOptions()
+	bool result = SkillGroups_Native.ApplyRuntimeSettings(GetBool("bEnabled:General"), GetBool("bMultipliersEnabled:General"), GetBool("bDivideSkillXpByGroupSize:General"), GetEffectiveSkillXpProfile(), GetEffectiveCharacterXpProfile())
+	if result
+		HookAvailable = true
+		InvalidateCharacterXpPageState()
+		InvalidateGroupPageState()
+		InvalidateSkillXpPageState()
+	else
+		HookAvailable = false
+		MCM.SetModSettingBool("SkillGroups", "bEnabled:General", false)
+		if OID_Enabled > 0
+			SetToggleOptionValue(OID_Enabled, false)
+			SetOptionFlags(OID_Enabled, OPTION_FLAG_DISABLED)
+		endif
+	endif
+	if a_showMessage
+		if result
+			ShowFinishedMessage("Skill Groups finished applying runtime settings.")
+		else
+			ShowFinishedMessage("Skill Groups failed to apply runtime settings.")
+		endif
+	endif
+	return result
 EndFunction
 
 Function SetInt(string a_settingKey, int a_value, int a_option)
@@ -929,35 +1124,36 @@ Function SetInt(string a_settingKey, int a_value, int a_option)
 EndFunction
 
 Function SetCharacterXpProfile(int a_value)
-	MCM.SetModSettingInt("SkillGroups", "iCharacterXpProfile:General", a_value)
+	SelectedCharacterXpProfileIndex = a_value
 	InvalidateCharacterXpPageState()
-	SetMenuOptionValue(OID_CharacterXpProfile, SkillXpProfileOptions[a_value])
+	InvalidateGroupPageState()
+	InvalidateSkillXpPageState()
+	if OID_CharacterXpProfile > 0
+		SetMenuOptionValue(OID_CharacterXpProfile, SkillXpProfileOptions[a_value])
+	endif
+	if OID_GroupProfile > 0
+		SetMenuOptionValue(OID_GroupProfile, SkillXpProfileOptions[a_value])
+	endif
 EndFunction
 
 Function SetSkillXpProfile(int a_value)
-	MCM.SetModSettingInt("SkillGroups", "iSkillXpProfile:General", a_value)
+	SelectedSkillXpProfileIndex = a_value
 	InvalidateSkillXpPageState()
 	SetMenuOptionValue(OID_SkillXpProfile, SkillXpProfileOptions[a_value])
-	RefreshNativeSettings()
 EndFunction
 
 Function SetMasterProfile(int a_value)
 	MCM.SetModSettingInt("SkillGroups", "iMasterProfile:General", a_value)
 	SetMenuOptionValue(OID_MasterProfile, SkillXpProfileOptions[a_value])
+	SelectedCharacterXpProfileIndex = -1
+	SelectedSkillXpProfileIndex = -1
 	if !SkillGroups_Native.IsSkillXpProfileEditable(a_value)
 		MCM.SetModSettingInt("SkillGroups", "iSkillXpProfile:General", a_value)
 		MCM.SetModSettingInt("SkillGroups", "iCharacterXpProfile:General", a_value)
 	endif
 	InvalidateCharacterXpPageState()
+	InvalidateGroupPageState()
 	InvalidateSkillXpPageState()
-	RefreshNativeSettings()
-EndFunction
-
-Function RefreshRuntimeState()
-	HookAvailable = SkillGroups_Native.RefreshSettings()
-	if !HookAvailable
-		MCM.SetModSettingBool("SkillGroups", "bEnabled:General", false)
-	endif
 EndFunction
 
 Function RefreshNativeSettings()
@@ -1059,6 +1255,55 @@ Function UpdateCustomCharacterXpFlags()
 	endwhile
 EndFunction
 
+Function UpdateGroupPageFlags()
+	CacheGroupPageState()
+	int flags = OPTION_FLAG_NONE
+	if !IsSelectedCharacterXpProfileEditable()
+		flags = OPTION_FLAG_DISABLED
+	endif
+	if OID_ImportGroupPage > 0
+		SetOptionFlags(OID_ImportGroupPage, flags)
+	endif
+	if OID_GroupProfile > 0
+		int profileFlags = OPTION_FLAG_NONE
+		if IsMasterProfileLocked()
+			profileFlags = OPTION_FLAG_DISABLED
+		endif
+		SetOptionFlags(OID_GroupProfile, profileFlags)
+		SetMenuOptionValue(OID_GroupProfile, SkillXpProfileOptions[GetEffectiveCharacterXpProfile()])
+	endif
+	if OID_ApplyGroups > 0
+		SetOptionFlags(OID_ApplyGroups, OPTION_FLAG_NONE)
+	endif
+	int i = 0
+	while i < OIDs_SkillGroups.Length
+		if OIDs_SkillGroups[i] > 0
+			SetOptionFlags(OIDs_SkillGroups[i], flags)
+			SetMenuOptionValue(OIDs_SkillGroups[i], GroupSlotOptions[CachedSkillGroupValues[i]])
+		endif
+		i += 1
+	endwhile
+	i = 0
+	while i < OIDs_GroupNames.Length
+		if OIDs_GroupNames[i] > 0
+			SetOptionFlags(OIDs_GroupNames[i], flags)
+			SetInputOptionValue(OIDs_GroupNames[i], GroupSlotOptions[i], false)
+		endif
+		i += 1
+	endwhile
+EndFunction
+
+bool Function IsGroupSlotUsed(int a_groupIndex)
+	int i = 0
+	while i < SkillLabels.Length
+		if CachedSkillGroupValues[i] == a_groupIndex
+			return true
+		endif
+		i += 1
+	endwhile
+	return false
+EndFunction
+
 Function UpdateCharacterXpSettingsFlags()
 	CacheCharacterXpPageState()
 	int flags = OPTION_FLAG_NONE
@@ -1124,6 +1369,8 @@ EndFunction
 
 Function ApplyCharacterXpProfiles()
 	if SkillGroups_Native.ApplyCharacterXpProfiles(GetEffectiveCharacterXpProfile())
+		MCM.SetModSettingInt("SkillGroups", "iCharacterXpProfile:General", GetCharacterXpProfile())
+		SelectedCharacterXpProfileIndex = -1
 		ShowFinishedMessage("Skill Groups finished saving and applying the character XP profile.")
 	else
 		ShowFinishedMessage("Skill Groups failed to save or apply the character XP profile.")
@@ -1163,7 +1410,7 @@ Function ImportCharacterXpPageFromProfile(int a_sourceProfile)
 			i += 1
 		endwhile
 		int groupIndex = 0
-		while groupIndex < GroupLabels.Length
+		while groupIndex < SkillGroups_Native.GetProfileGroupCount(characterTarget)
 			SkillGroups_Native.SetGroupXpProfileMultiplierScale(characterTarget, groupIndex, SkillGroups_Native.GetGroupXpProfileMultiplierScale(a_sourceProfile, groupIndex))
 			groupIndex += 1
 		endwhile
@@ -1177,6 +1424,27 @@ Function ImportCharacterXpPageFromProfile(int a_sourceProfile)
 		UpdateCustomCharacterXpFlags()
 		ShowFinishedMessage("Skill Groups finished loading profile.")
 	endif
+EndFunction
+
+Function ImportGroupsFromProfile(int a_sourceProfile)
+	if !IsSelectedCharacterXpProfileEditable()
+		return
+	endif
+
+	int i = 0
+	while i < 18
+		GroupSlotOptions[i] = SkillGroups_Native.GetProfileGroupSlotName(a_sourceProfile, i)
+		i += 1
+	endwhile
+	i = 0
+	while i < SkillLabels.Length
+		CachedSkillGroupValues[i] = SkillGroups_Native.GetProfileSkillGroupIndex(a_sourceProfile, i)
+		i += 1
+	endwhile
+	SetMenuOptionValue(OID_ImportGroupPage, SkillXpProfileOptions[a_sourceProfile])
+	UpdateGroupPageFlags()
+	ForcePageReset()
+	ShowFinishedMessage("Skill Groups staged profile groups.")
 EndFunction
 
 Function ImportSkillXpPageFromProfile(int a_sourceProfile)
@@ -1217,7 +1485,9 @@ Function SetProfileCharacterXpSettings(bool a_useFlatCharacterXp, float a_flatCh
 EndFunction
 
 Function ApplySkillXpMultipliers()
-	if SkillGroups_Native.ApplySkillXpMultipliers(GetBool("bDivideSkillXpByGroupSize:General"), GetEffectiveSkillXpProfile())
+	if SkillGroups_Native.ApplySkillXpMultipliers(GetBool("bDivideSkillXpByGroupSize:General"), GetEffectiveSkillXpProfile(), GetEffectiveCharacterXpProfile())
+		MCM.SetModSettingInt("SkillGroups", "iSkillXpProfile:General", GetSkillXpProfile())
+		SelectedSkillXpProfileIndex = -1
 		UpdateCustomSkillXpFlags()
 		ShowFinishedMessage("Skill Groups finished saving and applying the skill XP profile.")
 	else
@@ -1277,6 +1547,10 @@ int Function GetInt(string a_settingKey)
 EndFunction
 
 int Function GetCharacterXpProfile()
+	if SelectedCharacterXpProfileIndex >= 0 && SelectedCharacterXpProfileIndex < SkillXpProfileOptions.Length
+		return SelectedCharacterXpProfileIndex
+	endif
+
 	int value = MCM.GetModSettingInt("SkillGroups", "iCharacterXpProfile:General")
 	if value < 0 || value >= SkillXpProfileOptions.Length
 		return 0
@@ -1284,7 +1558,58 @@ int Function GetCharacterXpProfile()
 	return value
 EndFunction
 
+Function ApplyProfileGroups()
+	int profile = GetEffectiveCharacterXpProfile()
+	if IsSelectedCharacterXpProfileEditable()
+		if !SkillGroups_Native.CommitProfileGroups(profile, GroupSlotOptions, CachedSkillGroupValues)
+			ShowFinishedMessage("Skill Groups failed to stage profile groups.")
+			return
+		endif
+	endif
+	if SkillGroups_Native.ApplyProfileGroups(profile, GetBool("bDivideSkillXpByGroupSize:General"), GetEffectiveSkillXpProfile())
+		MCM.SetModSettingInt("SkillGroups", "iCharacterXpProfile:General", GetCharacterXpProfile())
+		SelectedCharacterXpProfileIndex = -1
+		InvalidateGroupPageState()
+		InvalidateCharacterXpPageState()
+		InvalidateSkillXpPageState()
+		UpdateGroupPageFlags()
+		ForcePageReset()
+		ShowFinishedMessage("Skill Groups finished saving and applying profile groups.")
+	else
+		ShowFinishedMessage("Skill Groups failed to save or apply profile groups.")
+	endif
+EndFunction
+
+Function SetSkillGroup(int a_skillIndex, int a_groupIndex)
+	if !IsSelectedCharacterXpProfileEditable()
+		return
+	endif
+	CachedSkillGroupValues[a_skillIndex] = a_groupIndex
+	SetMenuOptionValue(OIDs_SkillGroups[a_skillIndex], GroupSlotOptions[a_groupIndex])
+	ForcePageReset()
+EndFunction
+
+Function RenameGroup(int a_groupIndex, string a_name)
+	if !IsSelectedCharacterXpProfileEditable()
+		return
+	endif
+	if a_name == ""
+		ShowFinishedMessage("Skill Groups could not rename group.")
+		return
+	endif
+	GroupSlotOptions[a_groupIndex] = a_name
+	if OIDs_GroupNames[a_groupIndex] > 0
+		SetInputOptionValue(OIDs_GroupNames[a_groupIndex], GroupSlotOptions[a_groupIndex], false)
+	endif
+	ForcePageReset()
+	ShowFinishedMessage("Skill Groups staged group rename.")
+EndFunction
+
 int Function GetSkillXpProfile()
+	if SelectedSkillXpProfileIndex >= 0 && SelectedSkillXpProfileIndex < SkillXpProfileOptions.Length
+		return SelectedSkillXpProfileIndex
+	endif
+
 	int value = MCM.GetModSettingInt("SkillGroups", "iSkillXpProfile:General")
 	if value < 0 || value >= SkillXpProfileOptions.Length
 		return 0
@@ -1359,23 +1684,20 @@ float Function GetSkillXpDisplayDivisor(int a_skillIndex)
 		return 1.0
 	endif
 
-	if a_skillIndex == 0 || a_skillIndex == 1 || a_skillIndex == 3
-		return 3.0
-	elseif a_skillIndex == 2 || a_skillIndex == 14
-		return 2.0
-	elseif a_skillIndex == 5 || a_skillIndex == 6
-		return 2.0
-	elseif a_skillIndex == 9 || a_skillIndex == 12 || a_skillIndex == 16
-		return 3.0
-	elseif a_skillIndex == 13 || a_skillIndex == 15
-		return 2.0
-	elseif a_skillIndex == 7 || a_skillIndex == 8 || a_skillIndex == 11
-		return 3.0
-	elseif a_skillIndex == 4 || a_skillIndex == 10 || a_skillIndex == 17
-		return 3.0
+	int profile = GetEffectiveCharacterXpProfile()
+	int groupIndex = SkillGroups_Native.GetProfileSkillGroupIndex(profile, a_skillIndex)
+	int groupSize = 0
+	int i = 0
+	while i < SkillLabels.Length
+		if SkillGroups_Native.GetProfileSkillGroupIndex(profile, i) == groupIndex
+			groupSize += 1
+		endif
+		i += 1
+	endwhile
+	if groupSize < 1
+		return 1.0
 	endif
-
-	return 1.0
+	return groupSize as float
 EndFunction
 
 bool Function GetProfileUseFlatCharacterXp()
@@ -1461,22 +1783,6 @@ float Function GetDefaultSliderValueForOption(int a_option)
 EndFunction
 
 float Function GetDefaultGroupScale(int a_groupIndex)
-	if a_groupIndex == 0
-		return 0.75
-	elseif a_groupIndex == 1
-		return 1.15
-	elseif a_groupIndex == 2
-		return 0.75
-	elseif a_groupIndex == 3
-		return 1.4
-	elseif a_groupIndex == 4
-		return 1.4
-	elseif a_groupIndex == 5
-		return 0.15
-	elseif a_groupIndex == 6
-		return 1.4
-	endif
-
 	return 1.0
 EndFunction
 

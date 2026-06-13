@@ -4,6 +4,7 @@
 
 #include <Windows.h>
 #include <array>
+#include <cstddef>
 #include <filesystem>
 #include <spdlog/sinks/basic_file_sink.h>
 
@@ -50,8 +51,28 @@ namespace
 	{
 		SkillGroups::Settings::Load();
 		SkillGroups::Settings::LoadProfiles();
+
+		const auto& settings = SkillGroups::Settings::Get();
+		if (settings.multipliersEnabled) {
+			if (!SkillGroups::Hook::ApplyCharacterXpGameSettings(settings.levelUpBase, settings.levelUpMult)) {
+				SKSE::log::warn("SkillGroups could not apply character XP game settings on load");
+			}
+		} else if (!SkillGroups::Hook::RestoreDefaultCharacterXpGameSettings()) {
+			SKSE::log::warn("SkillGroups could not restore default character XP game settings on load");
+		}
 		if (!SkillGroups::Hook::RefreshCharacterXpMultipliers()) {
 			SKSE::log::warn("SkillGroups could not refresh character XP multipliers");
+		}
+		if (settings.multipliersEnabled &&
+			!SkillGroups::Hook::ApplySkillXpMultipliersToGame(
+				settings.divideSkillXpByGroupSize,
+				static_cast<std::size_t>(settings.skillXpProfileIndex),
+				static_cast<std::size_t>(settings.characterXpProfileIndex))) {
+			SKSE::log::warn("SkillGroups could not apply skill XP multipliers on load");
+		} else if (settings.multipliersEnabled) {
+			SKSE::log::info("SkillGroups applied skill XP multipliers on load");
+		} else if (!SkillGroups::Hook::RestoreDefaultSkillXpMultipliersToGame()) {
+			SKSE::log::warn("SkillGroups could not restore default skill XP multipliers on load");
 		}
 		if (!SkillGroups::Hook::Install()) {
 			SKSE::log::error("SkillGroups hook could not be installed; grouped character XP will remain disabled");

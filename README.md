@@ -12,16 +12,9 @@ For example, if One-Handed is 50 and Two-Handed ranks from 49 to 50, Two-Handed 
 
 The plugin does not replace Skyrim's skill progression. Skill XP, skill rank-ups, level-up UI, overflow behavior, and perk progression continue to run through the game.
 
-## Up next
+## Default Groups
 
-	- make divideByGroup apply to values immediately for transparency and do not affect cached live values for consistency. 
-		- E.g. toggling it will turn all 1.0 values to 1.0/groupSize, and caching will not apply any groupSize operation since if it is ticked, it should be getting the scaled values.
-		- If another mod changes it, it should be unticked before caching to prevent inconsistent scaling. 
-			- E.g. a mod changes a 0.33 value back to 1. reading that should return 1, but if it is ticked, unticking it would result in 3, not 0.99 (0.99 is close enough, or could be rounded to the nearest 0.05)
- 
-## V1.0 Groups
-
-The V1.0 groups are fixed:
+The shipped profiles use these default groups:
 
 ```text
 Melee: One-Handed, Two-Handed, Block
@@ -44,7 +37,9 @@ Data/MCM/Config/SkillGroups/settings.ini
 
 Character XP configuration supports per-skill contribution multipliers, per-skill character XP scaling, and per-group multipliers. The group contribution is based on the sum of the configured effective multipliers for skills in that group.
 
-Skill XP configuration is separate. It can cache and apply Skyrim's `useMult` values, optionally dividing the applied value by fixed group size.
+Skill XP configuration is separate. It can cache and apply Skyrim's `useMult` values, optionally dividing the applied value by profile group size.
+
+The General page has separate toggles for grouped character-XP gating and multiplier-backed settings. Disabling grouping makes the character-XP hook pass rank-up XP through without group gating. Disabling multipliers restores default level thresholds and skill XP `useMult` values instead of leaving previously applied runtime values active.
 
 Profiles are loaded from:
 
@@ -52,9 +47,20 @@ Profiles are loaded from:
 Data/SKSE/Plugins/SkillGroups/Profiles/*.ini
 ```
 
-The shipped profiles are `Default.ini`, `Custom.ini`, `Warrior.ini`, `Hunter.ini`, `Thief.ini`, and `Mage.ini`. Profile files are complete profiles: each valid file must include the character XP settings section, character XP contribution section, group XP scaling section, character skill scaling section, and skill XP multiplier section. `Custom.ini` is editable from the MCM and can be shared as a standalone profile file.
+The shipped profiles are `Default.ini`, `Custom.ini`, `Warrior.ini`, `Hunter.ini`, `Thief.ini`, and `Mage.ini`. Profile files are complete profiles: each valid file must include the character XP settings section, character XP contribution section, skill grouping section, group XP scaling section, character skill scaling section, and skill XP multiplier section. `Custom.ini` is editable from the MCM and can be shared as a standalone profile file.
 
-The General page profile acts as a master profile. Locked presets force the configuration pages to the same profile. Custom leaves page-level profile controls available. Character XP changes are committed with the Character XP page Apply button. Skill XP Cache reads live game values into the selected editable profile in memory; Skill XP Apply saves the editable profile INI and writes the selected profile values to the game.
+Profiles define groups with one skill per key:
+
+```ini
+[SkillGroups]
+OneHanded=Melee
+TwoHanded=Melee
+Block=Melee
+```
+
+Every skill must appear exactly once. Group names are dynamic, and the `GroupXpMultiplierScales` section must contain exactly the non-empty group names used by the profile. Group order follows the `GroupXpMultiplierScales` section.
+
+The General page profile acts as a master profile. Locked presets force the configuration pages to the same profile. Custom leaves page-level profile controls available. Group changes are committed with the Groups page Apply button. Character XP changes are committed with the Character XP page Apply button. Skill XP Cache reads live game values into the selected editable profile in memory; Skill XP Apply saves the editable profile INI and writes the selected profile values to the game.
 
 Character XP profiles can also opt into a flat skill-rank XP amount and configure Skyrim's base character level threshold and threshold increase per level. These profile-backed settings are applied from the Character XP page Apply button.
 

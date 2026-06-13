@@ -3,6 +3,8 @@
 #include <array>
 #include <cstdlib>
 #include <iostream>
+#include <string>
+#include <vector>
 
 namespace
 {
@@ -52,6 +54,24 @@ int main()
 	Require(melee && melee->name == "Melee", "block should belong to the melee group");
 	const auto* defense = FindSkillGroup(Skill::HeavyArmor);
 	Require(defense && defense->name == "Defence", "heavy armor should belong to the defence group");
+
+	std::array<std::string, SkillCount> customGroups{};
+	for (std::size_t index = 0; index < SkillCount; ++index) {
+		customGroups[index] = "Solo";
+	}
+	customGroups[static_cast<std::size_t>(Skill::OneHanded)] = "Weapon";
+	customGroups[static_cast<std::size_t>(Skill::TwoHanded)] = "Weapon";
+	customGroups[static_cast<std::size_t>(Skill::Block)] = "Shield";
+	SetActiveSkillGroups(BuildSkillGroupsFromAssignments(customGroups));
+
+	states = DefaultStates();
+	states[static_cast<std::size_t>(Skill::OneHanded)].level = 50.0F;
+	states[static_cast<std::size_t>(Skill::Block)].level = 60.0F;
+	Require(ShouldLevelIncreaseContributeAtLevel(states, Skill::TwoHanded, 51.0F), "custom grouping should move block out of two-handed gating");
+
+	const auto* shield = FindSkillGroup(Skill::Block);
+	Require(shield && shield->name == "Shield" && shield->skills.size() == 1, "custom grouping should create a one-skill block group");
+	SetActiveSkillGroups(std::vector<SkillGroup>{ DefaultSkillGroups().begin(), DefaultSkillGroups().end() });
 
 	std::cout << "SkillGroups tests passed\n";
 	return EXIT_SUCCESS;

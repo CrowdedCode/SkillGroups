@@ -8,24 +8,6 @@ namespace SkillGroups
 {
 	namespace
 	{
-		constexpr std::array<Skill, 3> kCrafting{ Skill::Smithing, Skill::Enchanting, Skill::Alchemy };
-		constexpr std::array<Skill, 2> kControl{ Skill::Illusion, Skill::Conjuration };
-		constexpr std::array<Skill, 3> kSupport{ Skill::Restoration, Skill::Alteration, Skill::Sneak };
-		constexpr std::array<Skill, 2> kDefence{ Skill::LightArmor, Skill::HeavyArmor };
-		constexpr std::array<Skill, 2> kRanged{ Skill::Archery, Skill::Destruction };
-		constexpr std::array<Skill, 3> kUtility{ Skill::Speech, Skill::Pickpocket, Skill::Lockpicking };
-		constexpr std::array<Skill, 3> kMelee{ Skill::OneHanded, Skill::TwoHanded, Skill::Block };
-
-		constexpr std::array<SkillGroup, SkillGroupCount> kSkillGroups{
-			SkillGroup{ "Crafting", kCrafting },
-			SkillGroup{ "Control", kControl },
-			SkillGroup{ "Support", kSupport },
-			SkillGroup{ "Defence", kDefence },
-			SkillGroup{ "Ranged", kRanged },
-			SkillGroup{ "Utility", kUtility },
-			SkillGroup{ "Melee", kMelee }
-		};
-
 		constexpr std::array<std::string_view, SkillCount> kSkillNames{
 			"OneHanded",
 			"TwoHanded",
@@ -48,6 +30,36 @@ namespace SkillGroups
 		};
 
 		constexpr auto kFirstSkillActorValue = 6U;
+		constexpr auto kInvalidGroupIndex = SkillCount;
+
+		[[nodiscard]] std::vector<SkillGroup> MakeDefaultSkillGroups()
+		{
+			return {
+				SkillGroup{ "Crafting", { Skill::Smithing, Skill::Enchanting, Skill::Alchemy } },
+				SkillGroup{ "Control", { Skill::Illusion, Skill::Conjuration } },
+				SkillGroup{ "Support", { Skill::Restoration, Skill::Alteration, Skill::Sneak } },
+				SkillGroup{ "Defence", { Skill::LightArmor, Skill::HeavyArmor } },
+				SkillGroup{ "Ranged", { Skill::Archery, Skill::Destruction } },
+				SkillGroup{ "Utility", { Skill::Speech, Skill::Pickpocket, Skill::Lockpicking } },
+				SkillGroup{ "Melee", { Skill::OneHanded, Skill::TwoHanded, Skill::Block } }
+			};
+		}
+
+		const std::vector<SkillGroup> kDefaultSkillGroups = MakeDefaultSkillGroups();
+		std::vector<SkillGroup> g_activeSkillGroups = MakeDefaultSkillGroups();
+		std::array<std::size_t, SkillCount> g_activeSkillGroupIndexes{};
+		bool g_activeSkillGroupIndexesBuilt{ false };
+
+		void RebuildActiveSkillGroupIndexes()
+		{
+			g_activeSkillGroupIndexes.fill(kInvalidGroupIndex);
+			for (std::size_t groupIndex = 0; groupIndex < g_activeSkillGroups.size(); ++groupIndex) {
+				for (const auto skill : g_activeSkillGroups[groupIndex].skills) {
+					g_activeSkillGroupIndexes[static_cast<std::size_t>(skill)] = groupIndex;
+				}
+			}
+			g_activeSkillGroupIndexesBuilt = true;
+		}
 	}
 
 	std::optional<Skill> ToSkill(std::uint32_t a_actorValue)
@@ -77,29 +89,75 @@ namespace SkillGroups
 
 	std::span<const SkillGroup> SkillGroups()
 	{
-		return kSkillGroups;
+		return g_activeSkillGroups;
+	}
+
+	std::span<const SkillGroup> DefaultSkillGroups()
+	{
+		return kDefaultSkillGroups;
+	}
+
+	std::vector<SkillGroup> BuildSkillGroupsFromAssignments(const std::array<std::string, SkillCount>& a_assignments)
+	{
+		std::vector<SkillGroup> groups;
+		for (std::size_t index = 0; index < a_assignments.size(); ++index) {
+			const auto& groupName = a_assignments[index];
+			auto group = std::ranges::find_if(groups, [&](const SkillGroup& a_group) {
+				return a_group.name == groupName;
+			});
+			if (group == groups.end()) {
+				group = groups.emplace(groups.end(), SkillGroup{ groupName, {} });
+			}
+
+			group->skills.push_back(static_cast<Skill>(index));
+		}
+
+		return groups;
+	}
+
+	void SetActiveSkillGroups(std::vector<SkillGroup> a_groups)
+	{
+		g_activeSkillGroups = a_groups.empty() ? MakeDefaultSkillGroups() : std::move(a_groups);
+		RebuildActiveSkillGroupIndexes();
 	}
 
 	const SkillGroup* FindSkillGroup(Skill a_skill)
 	{
-		for (const auto& group : kSkillGroups) {
-			if (std::ranges::find(group.skills, a_skill) != group.skills.end()) {
-				return std::addressof(group);
-			}
+		const auto groupIndex = FindSkillGroupIndex(a_skill);
+		if (!groupIndex) {
+			return nullptr;
 		}
 
-		return nullptr;
+		return std::addressof(g_activeSkillGroups[*groupIndex]);
 	}
 
 	std::optional<std::size_t> FindSkillGroupIndex(Skill a_skill)
 	{
-		for (std::size_t index = 0; index < kSkillGroups.size(); ++index) {
-			if (std::ranges::find(kSkillGroups[index].skills, a_skill) != kSkillGroups[index].skills.end()) {
-				return index;
-			}
+		const auto skillIndex = static_cast<std::size_t>(a_skill);
+		if (skillIndex >= SkillCount) {
+			return std::nullopt;
 		}
 
-		return std::nullopt;
+		if (!g_activeSkillGroupIndexesBuilt) {
+			RebuildActiveSkillGroupIndexes();
+		}
+
+		auto groupIndex = g_activeSkillGroupIndexes[skillIndex];
+		if (groupIndex == kInvalidGroupIndex && !g_activeSkillGroups.empty()) {
+			RebuildActiveSkillGroupIndexes();
+			groupIndex = g_activeSkillGroupIndexes[skillIndex];
+		}
+
+		return groupIndex < g_activeSkillGroups.size() ? std::optional<std::size_t>{ groupIndex } : std::nullopt;
+	}
+
+	std::span<const Skill> ActiveGroupSkills(std::size_t a_groupIndex)
+	{
+		if (a_groupIndex >= g_activeSkillGroups.size()) {
+			return {};
+		}
+
+		return g_activeSkillGroups[a_groupIndex].skills;
 	}
 
 	bool ShouldLevelIncreaseContributeAtLevel(
@@ -107,14 +165,14 @@ namespace SkillGroups
 		Skill a_skill,
 		float a_activeLevelAfterIncrease)
 	{
-		const auto* group = FindSkillGroup(a_skill);
-		if (!group) {
+		const auto groupIndex = FindSkillGroupIndex(a_skill);
+		if (!groupIndex) {
 			return true;
 		}
 
 		const auto activeLevelAfterIncrease = std::floor(a_activeLevelAfterIncrease);
 		float otherMax = 0.0F;
-		for (const auto skill : group->skills) {
+		for (const auto skill : g_activeSkillGroups[*groupIndex].skills) {
 			if (skill == a_skill) {
 				continue;
 			}

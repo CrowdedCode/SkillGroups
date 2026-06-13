@@ -5,6 +5,7 @@
 #include "SkillGroups/Settings.h"
 
 #include <RE/G/GameSettingCollection.h>
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstring>
@@ -19,6 +20,8 @@ namespace SkillGroups::Hook
 		constexpr REL::RelocationID kXpPerSkillRank{ 505484, 374914 };
 		constexpr auto kImproveLevelExpBySkillLevelAeOffset = static_cast<std::uintptr_t>(0x2CB);
 		constexpr auto kPatchSize = 12U;
+		constexpr auto kVanillaLevelUpBase = 75.0F;
+		constexpr auto kVanillaLevelUpMult = 25.0F;
 		constexpr std::array<std::uint8_t, kPatchSize> kExpectedAeBytes{
 			0xF3, 0x0F, 0x5C, 0xCA,
 			0xF3, 0x0F, 0x59, 0x0D,
@@ -31,6 +34,7 @@ namespace SkillGroups::Hook
 		};
 
 		std::array<float, SkillCount> g_effectiveMultipliers{};
+		std::array<float, SkillCount> g_effectiveGroupMultiplierSums{};
 		std::array<bool, SkillCount> g_hasMultiplier{};
 		std::array<float, SkillCount> g_cachedSkillXpBaseMultipliers{};
 		std::array<bool, SkillCount> g_hasSkillXpBaseMultiplier{};
@@ -88,7 +92,7 @@ namespace SkillGroups::Hook
 			function(std::addressof(a_player), a_oldLevel, a_newLevel, static_cast<std::uint32_t>(a_skill));
 		}
 
-		[[nodiscard]] bool ApplySkillXpMultipliersToGameImpl(bool a_useDivisor, std::size_t a_profileIndex)
+		[[nodiscard]] bool ApplySkillXpMultipliersToGameImpl(bool a_useDivisor, std::size_t a_profileIndex, std::size_t a_groupProfileIndex)
 		{
 			auto appliedAnyMultiplier = false;
 			const auto& profileMultipliers = Profiles::GetSkillXpMultipliers(a_profileIndex);
@@ -101,9 +105,7 @@ namespace SkillGroups::Hook
 					continue;
 				}
 
-				const auto* group = FindSkillGroup(skill);
-				const auto groupSize = group ? static_cast<float>(group->skills.size()) : 1.0F;
-				const auto divisor = a_useDivisor ? groupSize : 1.0F;
+				const auto divisor = a_useDivisor ? static_cast<float>(Profiles::GetSkillGroupSize(a_groupProfileIndex, index)) : 1.0F;
 
 				data->useMult = profileMultipliers[index] / divisor;
 				appliedAnyMultiplier = true;
@@ -149,23 +151,7 @@ namespace SkillGroups::Hook
 
 		[[nodiscard]] float GroupMultiplierSum(Skill a_skill)
 		{
-			const auto* group = FindSkillGroup(a_skill);
-			if (!group) {
-				const auto index = static_cast<std::size_t>(a_skill);
-				return g_hasMultiplier[index] ? g_effectiveMultipliers[index] : 1.0F;
-			}
-
-			float result = 0.0F;
-			for (const auto skill : group->skills) {
-				const auto index = static_cast<std::size_t>(skill);
-				if (!g_hasMultiplier[index]) {
-					continue;
-				}
-
-				result += g_effectiveMultipliers[index];
-			}
-
-			return result;
+			return g_effectiveGroupMultiplierSums[static_cast<std::size_t>(a_skill)];
 		}
 
 		[[nodiscard]] std::string DescribeGroupLevels(const std::array<SkillState, SkillCount>& a_states, Skill a_skill)
@@ -211,20 +197,30 @@ namespace SkillGroups::Hook
 		extern "C" float ImproveLevelExpBySkillLevelHook(float a_experience, std::uint32_t a_rawSkill)
 		{
 			const auto vanillaBaseResult = a_experience * GetXpPerSkillRank();
-			if (!Settings::Get().enabled || !g_cachedMultipliers) {
+			const auto& settings = Settings::Get();
+			if ((!settings.enabled && !settings.multipliersEnabled) || !g_cachedMultipliers) {
 				return vanillaBaseResult;
 			}
 
 			const auto skill = ToSkill(a_rawSkill);
 			if (!skill) {
+				if (Settings::IsDebugLoggingEnabled()) {
+					SKSE::log::debug("SkillGroups passing through unrecognized rank-up skill value: {}", a_rawSkill);
+				}
 				return vanillaBaseResult;
 			}
 
-			const auto& settings = Settings::Get();
-			const auto baseResult = settings.useFlatCharacterXp ? settings.flatCharacterXp : vanillaBaseResult;
+			const auto baseResult = settings.multipliersEnabled && settings.useFlatCharacterXp ? settings.flatCharacterXp : vanillaBaseResult;
 
-			if (Settings::Get().autoApplySkillXpOnLevelXp) {
-				(void)ApplySkillXpMultipliersToGameImpl(false, static_cast<std::size_t>(Settings::Get().skillXpProfileIndex));
+			if (settings.multipliersEnabled && settings.autoApplySkillXpOnLevelXp) {
+				(void)ApplySkillXpMultipliersToGameImpl(
+					false,
+					static_cast<std::size_t>(Settings::Get().skillXpProfileIndex),
+					static_cast<std::size_t>(Settings::Get().characterXpProfileIndex));
+			}
+
+			if (!settings.enabled) {
+				return baseResult;
 			}
 
 			auto* player = GetPlayer();
@@ -237,7 +233,7 @@ namespace SkillGroups::Hook
 			const auto awardedLevel = std::floor(a_experience);
 			states[static_cast<std::size_t>(*skill)].level = awardedLevel;
 			const auto contributes = ShouldLevelIncreaseContributeAtLevel(states, *skill, awardedLevel);
-			const auto groupMultiplierSum = GroupMultiplierSum(*skill);
+			const auto groupMultiplierSum = settings.multipliersEnabled ? GroupMultiplierSum(*skill) : 1.0F;
 			const auto awardedPlayerXp = contributes ? baseResult * groupMultiplierSum : 0.0F;
 			if (Settings::IsDebugLoggingEnabled()) {
 				const auto activeLevel = states[static_cast<std::size_t>(*skill)].level;
@@ -353,15 +349,19 @@ namespace SkillGroups::Hook
 
 	bool RefreshCharacterXpMultipliers()
 	{
-		const auto profileIndex = static_cast<std::size_t>(Settings::Get().characterXpProfileIndex);
-		const auto& characterXpMultipliers = Profiles::GetCharacterXpMultipliers(profileIndex);
-		const auto& groupXpMultiplierScales = Profiles::GetGroupXpMultiplierScales(profileIndex);
-		const auto& playerXpMultiplierScales = Profiles::GetPlayerXpMultiplierScales(profileIndex);
+		return RefreshCharacterXpMultipliers(static_cast<std::size_t>(Settings::Get().characterXpProfileIndex));
+	}
+
+	bool RefreshCharacterXpMultipliers(std::size_t a_profileIndex)
+	{
+		(void)Profiles::ApplyGroups(a_profileIndex);
+		const auto& characterXpMultipliers = Profiles::GetCharacterXpMultipliers(a_profileIndex);
+		const auto& playerXpMultiplierScales = Profiles::GetPlayerXpMultiplierScales(a_profileIndex);
 
 		for (std::size_t index = 0; index < SkillCount; ++index) {
 			const auto skill = static_cast<Skill>(index);
 			const auto groupIndex = FindSkillGroupIndex(skill);
-			const auto groupScale = groupIndex ? groupXpMultiplierScales[*groupIndex] : 1.0F;
+			const auto groupScale = groupIndex ? Profiles::GetGroupXpMultiplierScale(a_profileIndex, *groupIndex) : 1.0F;
 			const auto configuredMultiplier = characterXpMultipliers[index];
 			const auto skillScale = playerXpMultiplierScales[index];
 
@@ -370,6 +370,16 @@ namespace SkillGroups::Hook
 				skillScale *
 				groupScale;
 			g_hasMultiplier[index] = true;
+		}
+
+		for (std::size_t index = 0; index < SkillCount; ++index) {
+			const auto skill = static_cast<Skill>(index);
+			const auto groupIndex = FindSkillGroupIndex(skill);
+			float groupSum = 0.0F;
+			for (const auto groupSkill : groupIndex ? ActiveGroupSkills(*groupIndex) : std::span<const Skill>{}) {
+				groupSum += g_effectiveMultipliers[static_cast<std::size_t>(groupSkill)];
+			}
+			g_effectiveGroupMultiplierSums[index] = groupSum > 0.0F ? groupSum : g_effectiveMultipliers[index];
 		}
 
 		g_cachedMultipliers = true;
@@ -385,6 +395,16 @@ namespace SkillGroups::Hook
 		}
 
 		return appliedBase && appliedMult;
+	}
+
+	bool RestoreDefaultCharacterXpGameSettings()
+	{
+		const auto result = ApplyCharacterXpGameSettings(kVanillaLevelUpBase, kVanillaLevelUpMult);
+		if (result) {
+			SKSE::log::info("SkillGroups restored default character level thresholds");
+		}
+
+		return result;
 	}
 
 	float GetCharacterXpLevelUpBase()
@@ -412,7 +432,7 @@ namespace SkillGroups::Hook
 		}
 
 		const auto playerLevel = std::max(1.0F, static_cast<float>(player->GetLevel()));
-		const auto threshold = std::max(0.0F, a_levelUpBase + (a_levelUpMult * (playerLevel - 1.0F)));
+		const auto threshold = std::max(0.0F, a_levelUpBase + (a_levelUpMult * playerLevel));
 		runtimeData.skills->data->levelThreshold = threshold;
 		ImproveLevelExpBySkillLevel(*player, 0.0F, 0.0F, Skill::OneHanded);
 		SKSE::log::info("SkillGroups resynced current player level {} threshold to {} and processed vanilla level-up state", playerLevel, threshold);
@@ -453,9 +473,31 @@ namespace SkillGroups::Hook
 		return g_cachedSkillXpBaseMultipliers[a_index];
 	}
 
-	bool ApplySkillXpMultipliersToGame(bool a_useDivisor, std::size_t a_profileIndex)
+	bool ApplySkillXpMultipliersToGame(bool a_useDivisor, std::size_t a_profileIndex, std::size_t a_groupProfileIndex)
 	{
-		return ApplySkillXpMultipliersToGameImpl(a_useDivisor, a_profileIndex);
+		return ApplySkillXpMultipliersToGameImpl(a_useDivisor, a_profileIndex, a_groupProfileIndex);
+	}
+
+	bool RestoreDefaultSkillXpMultipliersToGame()
+	{
+		auto restoredAnyMultiplier = false;
+		for (std::size_t index = 0; index < SkillCount; ++index) {
+			const auto skill = static_cast<Skill>(index);
+			auto* data = GetActorValueSkill(skill);
+			if (!data) {
+				SKSE::log::warn("SkillGroups could not restore default skill XP multiplier for {}", SkillName(skill));
+				continue;
+			}
+
+			data->useMult = Profiles::GetSkillXpMultiplier(0, index);
+			restoredAnyMultiplier = true;
+		}
+
+		if (restoredAnyMultiplier) {
+			SKSE::log::info("SkillGroups restored default skill XP multipliers");
+		}
+
+		return restoredAnyMultiplier;
 	}
 
 	bool Install()
@@ -494,5 +536,10 @@ namespace SkillGroups::Hook
 		g_installed = true;
 		SKSE::log::info("SkillGroups installed ImproveLevelExpBySkillLevel hook at relocation {} + {:#x}", kImproveLevelExpBySkillLevel.id(), kImproveLevelExpBySkillLevelAeOffset);
 		return true;
+	}
+
+	bool IsInstalled()
+	{
+		return g_installed;
 	}
 }
