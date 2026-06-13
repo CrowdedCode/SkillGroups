@@ -158,7 +158,7 @@ Event OnOptionHighlight(int a_option)
 	elseif a_option == OID_DivideSkillXpByGroupSize
 		SetInfoText("Divides skill XP by the number of skills in its group.")
 	elseif a_option == OID_AutoApplySkillXp
-		SetInfoText("Applies cached skill XP multipliers during each skill rank-up. This can help if another mod rewrites skill XP multipliers at runtime; this may have a performance impact.")
+		SetInfoText("Applies cached skill XP multipliers during each skill rank-up. This can help if another mod rewrites skill XP multipliers; this may have a performance impact.")
 	elseif a_option == OID_ApplySkillXp
 		SetInfoText("Applies the configured skill XP multipliers to the game.")
 	elseif FindOption(OIDs_CustomCharacterXp, a_option) >= 0
@@ -807,7 +807,7 @@ Function RenderGeneralPage()
 	HookAvailable = SkillGroups_Native.IsHookAvailable()
 	RefreshSkillXpProfileOptions()
 	SetTitleText("$SkillGroups_Title_Main")
-	AddHeaderOption("$SkillGroups_Header_Runtime")
+	AddHeaderOption("$SkillGroups_Header_General")
 	int enabledFlags = OPTION_FLAG_NONE
 	if !HookAvailable
 		enabledFlags = OPTION_FLAG_DISABLED
@@ -1152,9 +1152,9 @@ bool Function ApplyRuntimeSettings(bool a_showMessage)
 	endif
 	if a_showMessage
 		if result
-			ShowFinishedMessage("Skill Groups finished applying runtime settings.")
+			ShowFinishedMessage("Skill Groups finished applying settings.")
 		else
-			ShowFinishedMessage("Skill Groups failed to apply runtime settings.")
+			ShowFinishedMessage("Skill Groups failed to apply settings.")
 		endif
 	endif
 	return result
